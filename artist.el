@@ -473,7 +473,7 @@ This variable is initialized by the `artist-make-prev-next-op-alist' function.")
 (defvar artist-rb-save-data nil)
 (defvar artist-arrow-point-1 nil)
 (defvar artist-arrow-point-2 nil)
-
+
 (defvar-keymap artist-mode-map
   :doc "Keymap for `artist-mode'."
   "<down-mouse-1>"   #'artist-down-mouse-1

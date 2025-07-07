@@ -1,0 +1,181 @@
+--- artist.nvim --- draw ascii graphics with your mouse
+--- Adapted from Emacs by Nathan Smith <nathan@nathansmith.io>
+--- https://raw.githubusercontent.com/emacs-mirror/emacs/refs/heads/master/lisp/textmodes/artist.el
+
+-- TODO: adapt this into Neovim help text
+--; Commentary:
+
+-- What is artist?
+-- ---------------
+--
+-- Artist is an Emacs Lisp package that allows you to draw lines,
+-- rectangles and ellipses by using your mouse and/or keyboard.  The
+-- shapes are made up with the ascii characters |, -, / and \.
+--
+-- Features are:
+--
+-- * Intersecting: When a `|' intersects with a `-', a `+' is
+--   drawn, like this:    |        \ /
+--                      --+--       X
+--                        |        / \
+--
+-- * Rubber-banding: When drawing lines you can interactively see the
+--   result while holding the mouse button down and moving the mouse.  If
+--   your machine is not fast enough (a 386 is a bit too slow, but a
+--   Pentium is good enough), you can turn this feature off.  You will
+--   then see 1's and 2's which mark the 1st and 2nd endpoint of the line
+--   you are drawing.
+--
+-- * Drawing operations: The following drawing operations are implemented:
+--
+--     lines                    straight-lines
+--     rectangles               squares
+--     poly-lines               straight poly-lines
+--     ellipses                 circles
+--     text (see-thru)          text (overwrite)
+--     spray-can                setting size for spraying
+--     vaporize line            vaporize lines
+--     erase characters         erase rectangles
+--
+--   Straight lines are lines that go horizontally, vertically or
+--   diagonally.  Plain lines go in any direction.  The operations in
+--   the right column are accessed by holding down the shift key while
+--   drawing.
+--
+--   It is possible to vaporize (erase) entire lines and connected lines
+--   (rectangles for example) as long as the lines being vaporized are
+--   straight and connected at their endpoints.  Vaporizing is inspired
+--   by the drawrect package by Jari Aalto <jari.aalto@poboxes.com>.
+--
+-- * Flood-filling: You can fill any area with a certain character by
+--   flood-filling.
+--
+-- * Cut, copy and paste: You can cut, copy and paste rectangular
+--   regions.  Artist also interfaces with the rect package (this can be
+--   turned off if it causes you any trouble) so anything you cut in
+--   artist can be yanked with `C-x r y' and vice versa.
+--
+-- * Drawing with keys: Everything you can do with the mouse, you can
+--   also do without the mouse.
+--
+-- * Arrows: After having drawn a (straight) line or a (straight)
+--   poly-line, you can set arrows on the line-ends by typing < or >.
+--
+-- * Aspect-ratio: You can set the user option `artist-aspect-ratio' to
+--   reflect the height-width ratio for the font you are using.  Squares
+--   and circles are then drawn square/round.  Note, that once your
+--   ascii-file is shown with font with a different height-width ratio,
+--   the squares won't be square and the circles won't be round.
+--
+-- * Picture mode compatibility: Artist is picture mode compatible (this
+--   can be turned off).
+--
+-- See the documentation for the function `artist-mode' for a detailed
+-- description on how to use artist.
+--
+--
+-- What about adding my own drawing modes?
+-- ---------------------------------------
+--
+-- See the short guide at the end of this file.
+-- If you add a new drawing mode, send it to me, and I would gladly
+-- include in the next release!
+
+--; Requirements:
+
+-- Artist requires the `rect' package (which comes with Emacs) to be
+-- loadable, unless the variable `artist-interface-with-rect' is set
+-- to nil.
+--
+-- Artist also requires the Picture mode (which also comes with Emacs)
+-- to be loadable, unless the variable `artist-picture-compatibility'
+-- is set to nil.
+
+--; Known bugs:
+
+-- It is not possible to change between shifted and unshifted operation
+-- while drawing with the mouse.  (See the comment in the function
+-- `artist-shift-has-changed' for further details.)
+
+--; ChangeLog:
+
+-- 1.2.6	6-Aug-2004
+-- New:		Coerced with the artist.el that's in Emacs-21.3.
+--              (minor editorial changes)
+--
+-- 1.2.5	4-Aug-2004
+-- New:		Added tool selection via the mouse-wheel
+--		Function provided by Andreas Leue <al@sphenon.de>
+--
+-- 1.2.4	25-Oct-2001
+-- Bugfix:	Some operations (the edit menu) got hidden
+-- Bugfix:      The first arrow for poly-lines was always pointing
+--              to the right
+-- Changed:	Updated with changes made for Emacs 21.1
+--
+-- 1.2.3	20-Nov-2000
+-- Bugfix:	Autoload cookie corrected
+--
+-- 1.2.2	19-Nov-2000
+-- Changed:	More documentation fixes.
+-- Bugfix:	The arrow characters (`artist-arrows'), which
+--              got wrong in 1.1, are now corrected.
+--
+-- 1.2.1	15-Nov-2000
+-- New:		Documentation fixes.
+-- Bugfix:	Set `next-line-add-newlines' to t while in `artist-mode'.
+--		Drawing with keys was confusing without this fix, if
+--		`next-line-add-newlines' was set to nil.
+--		Thanks to Tatsuo Furukawa <tatsuo@kobe.hp.com> for this.
+--
+-- 1.2		22-Oct-2000
+-- New:		Updated to work with Emacs 21
+--
+-- 1.1		15-Aug-2000
+-- Bugfix:	Cursor follows mouse pointer more closely.
+-- New:		Works with Emacs 20.x
+-- New:		Variables are customizable
+--
+-- 1.1-beta1    21-Apr-1998
+-- New:		Spray-can (Utterly useless, I believe, but it was fun
+--		to implement :-) after an idea by Karl-Johan Karlsson
+--		<kj@lysator.liu.se>.
+-- New:		Freehand drawing (with pen).
+-- New:		Vaporizing lines.
+-- New:		Text-rendering using figlet.
+-- New:		Picture mode compatibility.
+-- Changed:	All Artist keys now uses the prefix C-c C-a not to conflict
+--		with Picture mode.
+-- Bugfix:	No longer leaves traces of lines when rubberbanding
+--              if the buffer auto-scrolls.
+-- Bugfix:	Infinite loop sometimes when rubberbanding was turned
+--		off.
+--
+-- 1.0          01-Mar-1998
+-- First official release.
+
+--; Code:
+
+-- Parts:
+-- User defined Variables
+-- Internal Variables
+--
+-- Master Table for `artist-mode'.
+-- This table is primarily a table over the different graphics operations
+-- available in Artist mode, but it also holds layout information for the
+-- popup menu.
+--
+-- Floating/popover selection menus. Should be selectable with mouse.
+--
+-- Must check that "The default font isn't monospaced, so the drawings in this buffer may look odd"
+--
+-- Artist mode is a filetype? No, because we want to be able to draw in text or any file type.
+-- It needs to be a mode. How to add a vim mode?
+-- https://old.reddit.com/r/vim/comments/1mkdhn/create_ascii_art_in_vim/
+--
+-- Will need to set
+--   setlocal virtualedit=all
+--   setlocal cc=80
+--
+-- A vim script:
+-- https://github.com/vim-scripts/DrawIt
