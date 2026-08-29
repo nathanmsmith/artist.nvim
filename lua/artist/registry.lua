@@ -1,5 +1,6 @@
 local M = {}
 
+---@type table<string, Artist.OperationDefinition>
 local definitions = {
   pen = { label = "Pen", kind = "continuous", shifted = "pen_line" },
   pen_line = { label = "Pen Line", kind = "continuous", shifted = "pen", arrows = true },
@@ -33,6 +34,7 @@ local definitions = {
   flood_fill = { label = "Flood Fill", kind = "one_point", shifted = "flood_fill" },
 }
 
+---@type table<string, string>
 local aliases = {
   freehand = "pen_line",
   erase = "erase_rectangle",
@@ -45,23 +47,30 @@ local aliases = {
   flood = "flood_fill",
 }
 
+---@param name? any
+---@return string?
 function M.resolve(name)
   name = tostring(name or ""):lower():gsub("[%s%-]+", "_")
   name = aliases[name] or name
   return definitions[name] and name or nil
 end
 
+---@param name? any
+---@return Artist.OperationDefinition?
 function M.get(name)
   local resolved = M.resolve(name)
   return resolved and definitions[resolved] or nil
 end
 
+---@return string[]
 function M.names()
   local result = vim.tbl_keys(definitions)
   table.sort(result)
   return result
 end
 
+---@param name string
+---@return string?
 function M.shifted(name)
   local operation = M.get(name)
   return operation and operation.shifted or nil

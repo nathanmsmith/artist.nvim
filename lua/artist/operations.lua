@@ -2,12 +2,18 @@ local geometry = require("artist.geometry")
 local display_grid = require("artist.grid")
 local patch_module = require("artist.patch")
 
+---@class Artist.OperationsModule
+---@field copy_buffer? string[]
 local M = { copy_buffer = nil }
 
+---@param value number
+---@return integer
 local function round(value)
   return math.floor(value + 0.5)
 end
 
+---@param options Artist.Options
+---@return Artist.Options
 local function drawing_options(options)
   return {
     aspect_ratio = options.aspect_ratio,
@@ -22,12 +28,26 @@ local function drawing_options(options)
   }
 end
 
+---@param transaction Artist.Patch
+---@param name string
+---@param from Artist.PositionLike
+---@param to Artist.PositionLike
+---@param options Artist.Options
+---@return Artist.Point[]
 local function add_geometry(transaction, name, from, to, options)
   local points = geometry[name](from, to, drawing_options(options))
   transaction:add(points, { intersect = options.line_character == nil })
   return points
 end
 
+---@param from Artist.PositionLike
+---@param to Artist.PositionLike
+---@param square boolean
+---@param aspect_ratio? number
+---@return integer top
+---@return integer bottom
+---@return integer left
+---@return integer right
 local function rectangle_bounds(from, to, square, aspect_ratio)
   from, to = geometry.normalize(from), geometry.normalize(to)
   if square then
@@ -36,6 +56,16 @@ local function rectangle_bounds(from, to, square, aspect_ratio)
   return math.min(from.row, to.row), math.max(from.row, to.row), math.min(from.col, to.col), math.max(from.col, to.col)
 end
 
+---@param transaction Artist.Patch
+---@param from Artist.PositionLike
+---@param to Artist.PositionLike
+---@param square boolean
+---@param options Artist.Options
+---@return string[] lines
+---@return integer top
+---@return integer bottom
+---@return integer left
+---@return integer right
 local function copy_region(transaction, from, to, square, options)
   local top, bottom, left, right = rectangle_bounds(from, to, square, options.aspect_ratio)
   local lines = {}
@@ -68,6 +98,8 @@ local orientations = {
   backslash = { sx = 1, sy = 1, line = "\\", accepts = { ["\\"] = true, X = true } },
 }
 
+---@param character string
+---@return string[]
 local function orientations_at(character)
   if character == "-" then
     return { "horizontal" }
@@ -85,6 +117,13 @@ local function orientations_at(character)
   return {}
 end
 
+---@param transaction Artist.Patch
+---@param row integer
+---@param col integer
+---@param orientation string
+---@param sign -1|1
+---@param fuzziness integer
+---@return Artist.Position
 local function find_endpoint(transaction, row, col, orientation, sign, fuzziness)
   local info = orientations[orientation]
   local current_row, current_col, last_row, last_col = row, col, row, col
@@ -116,13 +155,20 @@ local function find_endpoint(transaction, row, col, orientation, sign, fuzziness
   return { row = last_row, col = last_col }
 end
 
+---@param transaction Artist.Patch
+---@param row integer
+---@param col integer
+---@param orientation string
+---@param options Artist.Options
+---@return Artist.Position first
+---@return Artist.Position last
 local function vaporize_orientation(transaction, row, col, orientation, options)
   local info = orientations[orientation]
   local first = find_endpoint(transaction, row, col, orientation, -1, options.vaporize_fuzziness or 1)
   local last = find_endpoint(transaction, row, col, orientation, 1, options.vaporize_fuzziness or 1)
   local current_row, current_col = first.row, first.col
   while true do
-    local existing = transaction:get(current_row, current_col)
+    local existing = assert(transaction:get(current_row, current_col))
     transaction:set(current_row, current_col, patch_module.unintersection(info.line, existing, options.erase_character))
     if current_row == last.row and current_col == last.col then
       break
@@ -132,12 +178,16 @@ local function vaporize_orientation(transaction, row, col, orientation, options)
   return first, last
 end
 
+---@param transaction Artist.Patch
+---@param position Artist.PositionLike
+---@param connected boolean
+---@param options Artist.Options
 local function vaporize(transaction, position, connected, options)
   local queue = { geometry.normalize(position) }
   local visited = {}
   while #queue > 0 do
     local current = table.remove(queue)
-    for _, orientation in ipairs(orientations_at(transaction:get(current.row, current.col))) do
+    for _, orientation in ipairs(orientations_at(assert(transaction:get(current.row, current.col)))) do
       local id = current.row .. ":" .. current.col .. ":" .. orientation
       if not visited[id] then
         visited[id] = true
@@ -154,6 +204,9 @@ local function vaporize(transaction, position, connected, options)
   end
 end
 
+---@param transaction Artist.Patch
+---@param position Artist.PositionLike
+---@param options Artist.Options
 local function flood_fill(transaction, position, options)
   position = geometry.normalize(position)
   local source = transaction:get(position.row, position.col)
@@ -197,11 +250,17 @@ local function flood_fill(transaction, position, options)
   end
 end
 
+---@param text string
+---@param options Artist.Options
+---@return string[]
 local function render_text(text, options)
   local renderer = options.text_renderer
   if type(renderer) == "function" then
     local rendered = renderer(text, options)
-    return type(rendered) == "string" and vim.split(rendered, "\n", { plain = true }) or rendered
+    if type(rendered) == "string" then
+      return vim.split(rendered, "\n", { plain = true })
+    end
+    return rendered
   end
   local executable = options.figlet_executable or "figlet"
   if vim.fn.executable(executable) == 1 and vim.system then
@@ -213,19 +272,27 @@ local function render_text(text, options)
   return { text }
 end
 
+---@param transaction Artist.Patch
+---@param position Artist.PositionLike
+---@param text? string
+---@param see_through boolean
+---@param options Artist.Options
 local function insert_text(transaction, position, text, see_through, options)
   position = geometry.normalize(position)
   for row_offset, line in ipairs(render_text(text or "", options) or {}) do
     for col, character in ipairs(display_grid.decode_line(line, options.tabstop or 8)) do
       if type(character) ~= "table" then
         if not see_through or character ~= " " then
-          transaction:set(position.row + row_offset - 1, position.col + col - 1, character)
+          transaction:set(position.row + row_offset - 1, position.col + col - 1, character --[[@as string]])
         end
       end
     end
   end
 end
 
+---@param transaction Artist.Patch
+---@param position Artist.PositionLike
+---@param options Artist.Options
 local function spray(transaction, position, options)
   position = geometry.normalize(position)
   local radius = math.max(1, options.spray_radius or 4)
@@ -250,6 +317,12 @@ local function spray(transaction, position, options)
   end
 end
 
+---@param transaction Artist.Patch
+---@param name string
+---@param from Artist.PositionLike
+---@param to? Artist.PositionLike
+---@param options? Artist.Options
+---@return Artist.Point[]|integer|nil
 function M.execute(transaction, name, from, to, options)
   options = options or {}
   if
@@ -260,6 +333,7 @@ function M.execute(transaction, name, from, to, options)
     or name == "ellipse"
     or name == "circle"
   then
+    assert(to, "artist: this operation needs two positions")
     return add_geometry(transaction, name, from, to, options)
   elseif name == "pen" then
     local position = geometry.normalize(to or from)
@@ -277,13 +351,16 @@ function M.execute(transaction, name, from, to, options)
     transaction:add(points)
     return points
   elseif name == "poly_line" or name == "straight_poly_line" then
+    assert(to, "artist: this operation needs two positions")
     return add_geometry(transaction, name == "poly_line" and "line" or "straight_line", from, to, options)
   elseif name == "erase_character" then
     local position = geometry.normalize(to or from)
     transaction:set(position.row, position.col, options.erase_character or " ")
   elseif name == "erase_rectangle" then
+    assert(to, "artist: this operation needs two positions")
     transaction:add(geometry.region(from, to, options.erase_character or " "))
   elseif name == "copy_rectangle" or name == "copy_square" or name == "cut_rectangle" or name == "cut_square" then
+    assert(to, "artist: this operation needs two positions")
     local square = name:find("square", 1, true) ~= nil
     local _, top, bottom, left, right = copy_region(transaction, from, to, square, options)
     if name:find("cut", 1, true) then
@@ -294,7 +371,7 @@ function M.execute(transaction, name, from, to, options)
     for offset, line in ipairs(M.copy_buffer or {}) do
       for col, character in ipairs(display_grid.decode_line(line, options.tabstop or 8)) do
         if type(character) ~= "table" then
-          transaction:set(position.row + offset - 1, position.col + col - 1, character)
+          transaction:set(position.row + offset - 1, position.col + col - 1, character --[[@as string]])
         end
       end
     end

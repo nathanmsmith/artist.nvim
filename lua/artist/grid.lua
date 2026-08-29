@@ -1,8 +1,14 @@
 local M = {}
 
+---@class Artist.Grid
+---@field rows Artist.GridCell[][]
+---@field original string[]
+---@field tabstop integer
 local Grid = {}
 Grid.__index = Grid
 
+---@param text string
+---@return string[]
 local function split_codepoints(text)
   if text == "" then
     return {}
@@ -10,6 +16,9 @@ local function split_codepoints(text)
   return vim.fn.split(text, "\\zs")
 end
 
+---@param text string
+---@param tabstop integer
+---@return Artist.GridCell[]
 local function decode_line(text, tabstop)
   local cells = {}
   for _, character in ipairs(split_codepoints(text)) do
@@ -41,6 +50,8 @@ local function decode_line(text, tabstop)
   return cells
 end
 
+---@param row? Artist.GridCell[]
+---@return Artist.GridCell[]
 local function copy_row(row)
   local result = {}
   for index, value in ipairs(row or {}) do
@@ -49,6 +60,9 @@ local function copy_row(row)
   return result
 end
 
+---@param lines string[]
+---@param options? Artist.GridOptions
+---@return Artist.Grid
 function Grid.new(lines, options)
   options = options or {}
   local self = setmetatable({ rows = {}, original = vim.deepcopy(lines), tabstop = options.tabstop or 8 }, Grid)
@@ -58,11 +72,14 @@ function Grid.new(lines, options)
   return self
 end
 
+---@param bufnr integer
+---@return Artist.Grid
 function Grid.from_buffer(bufnr)
   bufnr = bufnr == 0 and vim.api.nvim_get_current_buf() or bufnr
   return Grid.new(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), { tabstop = vim.bo[bufnr].tabstop })
 end
 
+---@return Artist.Grid
 function Grid:clone()
   local result = setmetatable({ rows = {}, original = vim.deepcopy(self.original), tabstop = self.tabstop }, Grid)
   for index, row in ipairs(self.rows) do
@@ -71,14 +88,20 @@ function Grid:clone()
   return result
 end
 
+---@return integer
 function Grid:height()
   return #self.rows
 end
 
+---@param row integer
+---@return integer
 function Grid:width(row)
   return #(self.rows[row] or {})
 end
 
+---@param row integer
+---@param col integer
+---@return string?
 function Grid:get(row, col)
   if row < 1 or col < 1 then
     return nil
@@ -86,18 +109,21 @@ function Grid:get(row, col)
   local cells = self.rows[row]
   local value = cells and cells[col]
   if type(value) == "table" and value.continuation then
-    return cells[value.lead]
+    return cells[value.lead] --[[@as string]]
   end
-  return value or " "
+  return value --[[@as string?]] or " "
 end
 
+---@param cells Artist.GridCell[]
+---@param col integer
 local function clear_glyph(cells, col)
   local value = cells[col]
   local lead = type(value) == "table" and value.lead or col
-  if type(cells[lead]) ~= "string" then
+  local character = cells[lead]
+  if type(character) ~= "string" then
     return
   end
-  local width = math.max(1, vim.fn.strdisplaywidth(cells[lead]))
+  local width = math.max(1, vim.fn.strdisplaywidth(character))
   cells[lead] = " "
   for index = lead + 1, lead + width - 1 do
     if type(cells[index]) == "table" and cells[index].lead == lead then
@@ -106,6 +132,9 @@ local function clear_glyph(cells, col)
   end
 end
 
+---@param row integer
+---@param col integer
+---@param character? any
 function Grid:set(row, col, character)
   assert(row >= 1 and col >= 1, "artist: grid coordinates are one-based")
   character = character == nil and " " or tostring(character)
@@ -129,6 +158,9 @@ function Grid:set(row, col, character)
   end
 end
 
+---@param row integer
+---@param trim? boolean
+---@return string
 function Grid:render_row(row, trim)
   local cells = self.rows[row] or {}
   local output = {}
@@ -141,6 +173,8 @@ function Grid:render_row(row, trim)
   return trim and text:gsub("%s+$", "") or text
 end
 
+---@param trim? boolean
+---@return string[]
 function Grid:render(trim)
   local lines = {}
   for row = 1, math.max(1, #self.rows) do

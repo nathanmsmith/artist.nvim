@@ -6,6 +6,7 @@ local registry = require("artist.registry")
 
 local M = {}
 
+---@type Artist.Options
 local defaults = {
   tool = "pen_line",
   aspect_ratio = 1,
@@ -43,7 +44,9 @@ local defaults = {
   transparent_selection = true,
 }
 
+---@type Artist.Options
 local config = vim.deepcopy(defaults)
+---@type table<integer, Artist.Session>
 local sessions = {}
 local namespace = vim.api.nvim_create_namespace("artist.nvim")
 local augroup
@@ -111,26 +114,44 @@ local movement_mappings = {
   { "<C-f>", "l" },
 }
 
+---@param bufnr? integer
+---@return integer
 local function resolve_buffer(bufnr)
-  return (bufnr == nil or bufnr == 0) and vim.api.nvim_get_current_buf() or bufnr
+  if bufnr == nil or bufnr == 0 then
+    return vim.api.nvim_get_current_buf()
+  end
+  return bufnr
 end
 
+---@param bufnr? integer
+---@return Artist.Session? state
+---@return integer bufnr
 local function session_for(bufnr)
   bufnr = resolve_buffer(bufnr)
   return sessions[bufnr], bufnr
 end
 
+---@param name string
+---@return Artist.OperationDefinition
+local function operation_definition(name)
+  return assert(registry.get(name), "artist: unknown operation " .. name)
+end
+
+---@param bufnr integer
 local function clear_preview(bufnr)
   if vim.api.nvim_buf_is_valid(bufnr) then
     vim.api.nvim_buf_clear_namespace(bufnr, namespace, 0, -1)
   end
 end
 
+---@return Artist.Position
 local function position_at_cursor()
   local cursor = vim.api.nvim_win_get_cursor(0)
   return { row = cursor[1], col = vim.fn.virtcol(".") }
 end
 
+---@param bufnr integer
+---@return Artist.Position?
 local function mouse_position(bufnr)
   local value = vim.fn.getmousepos()
   if value.winid == 0 or value.line < 1 or value.column < 1 or vim.api.nvim_win_get_buf(value.winid) ~= bufnr then
@@ -151,6 +172,9 @@ local function mouse_position(bufnr)
   return { row = row, col = vim.fn.strdisplaywidth(prefix) + 1 + (value.coladd or 0) }
 end
 
+---@param state Artist.Session
+---@param operation string
+---@return Artist.Options
 local function effective_options(state, operation)
   local options = vim.deepcopy(state.options)
   options.first_arrow = state.first_arrow
@@ -164,10 +188,19 @@ local function effective_options(state, operation)
   return options
 end
 
+---@param state Artist.Session
+---@return Artist.Patch
 local function new_transaction(state)
   return patch.new(grid.from_buffer(state.bufnr), { trim_line_endings = state.options.trim_line_endings })
 end
 
+---@param state Artist.Session
+---@param transaction Artist.Patch
+---@param operation string
+---@param from Artist.PositionLike
+---@param to? Artist.PositionLike
+---@param extra? Artist.Options
+---@return Artist.Point[]|integer|nil
 local function execute(state, transaction, operation, from, to, extra)
   local options = effective_options(state, operation)
   if extra then
@@ -176,6 +209,10 @@ local function execute(state, transaction, operation, from, to, extra)
   return operations.execute(transaction, operation, from, to, options)
 end
 
+---@param state Artist.Session
+---@param current? Artist.Position
+---@param operation? string
+---@return Artist.Patch
 local function build_poly_transaction(state, current, operation)
   local transaction = new_transaction(state)
   local points = state.poly_points or {}
@@ -195,6 +232,8 @@ local function build_poly_transaction(state, current, operation)
   return transaction
 end
 
+---@param state Artist.Session
+---@param transaction? Artist.Patch
 local function preview_transaction(state, transaction)
   clear_preview(state.bufnr)
   if not transaction or transaction:is_empty() then
@@ -261,6 +300,11 @@ local function preview_transaction(state, transaction)
   end
 end
 
+---@param state Artist.Session
+---@param transaction Artist.Patch
+---@param from Artist.Position
+---@param to Artist.Position
+---@param kind Artist.OperationKind
 local function preview_operation(state, transaction, from, to, kind)
   if state.options.rubber_banding == false and (kind == "two_point" or kind == "poly_point") then
     local markers = new_transaction(state)
@@ -272,6 +316,7 @@ local function preview_operation(state, transaction, from, to, kind)
   end
 end
 
+---@param state Artist.Session
 local function stop_timer(state)
   if state.timer then
     state.timer:stop()
@@ -280,6 +325,8 @@ local function stop_timer(state)
   end
 end
 
+---@param state Artist.Session
+---@param transaction? Artist.Patch
 local function commit(state, transaction)
   stop_timer(state)
   clear_preview(state.bufnr)
@@ -288,6 +335,10 @@ local function commit(state, transaction)
   end
 end
 
+---@param value string
+---@param from string
+---@param to string
+---@return string
 local function with_highlight_override(value, from, to)
   local result = {}
   for mapping in value:gmatch("[^,]+") do
@@ -299,8 +350,9 @@ local function with_highlight_override(value, from, to)
   return table.concat(result, ",")
 end
 
+---@param state Artist.Session
+---@return string
 local function toolbar_text(state)
-  local operation = registry.get(state.tool)
   local drawing = state.drag or state.anchor or state.transaction
   local arrows = (state.first_arrow and " <" or "") .. (state.second_arrow and " >" or "")
   return table.concat({
@@ -311,6 +363,8 @@ local function toolbar_text(state)
   })
 end
 
+---@param state Artist.Session
+---@param winid integer
 local function configure_window(state, winid)
   if state.active_windows[winid] then
     return
@@ -332,6 +386,8 @@ local function configure_window(state, winid)
   end
 end
 
+---@param state Artist.Session
+---@param winid integer
 local function restore_window(state, winid)
   if not state.active_windows[winid] or not vim.api.nvim_win_is_valid(winid) then
     return
@@ -343,6 +399,7 @@ local function restore_window(state, winid)
   state.active_windows[winid] = nil
 end
 
+---@param state Artist.Session
 local function update_toolbar(state)
   if state.options.winbar then
     for winid in pairs(state.active_windows) do
@@ -353,6 +410,8 @@ local function update_toolbar(state)
   end
 end
 
+---@param state Artist.Session
+---@return table[]
 local function all_mapping_definitions(state)
   local result = vim.deepcopy(mapping_definitions)
   for _, value in ipairs(movement_mappings) do
@@ -365,6 +424,8 @@ local function all_mapping_definitions(state)
   return result
 end
 
+---@param lhs string
+---@return table?
 local function save_mapping(lhs)
   local value = vim.fn.maparg(lhs, "n", false, true)
   if type(value) == "table" and value.buffer == 1 and next(value) ~= nil then
@@ -372,6 +433,8 @@ local function save_mapping(lhs)
   end
 end
 
+---@param bufnr integer
+---@param state Artist.Session
 local function install_mappings(bufnr, state)
   if not state.options.mappings then
     return
@@ -408,6 +471,8 @@ local function install_mappings(bufnr, state)
   end)
 end
 
+---@param bufnr integer
+---@param state Artist.Session
 local function remove_mappings(bufnr, state)
   if not state.options.mappings then
     return
@@ -423,6 +488,7 @@ local function remove_mappings(bufnr, state)
   end)
 end
 
+---@param options Artist.Options
 local function validate_options(options)
   if options.aspect_ratio ~= nil and (type(options.aspect_ratio) ~= "number" or options.aspect_ratio <= 0) then
     error("artist: aspect_ratio must be a positive number")
@@ -434,6 +500,8 @@ local function validate_options(options)
   end
 end
 
+---Configure defaults for future Artist sessions and direct draw calls.
+---@param options? Artist.Options
 function M.setup(options)
   vim.validate("options", options, "table", true)
   config = vim.tbl_deep_extend("force", vim.deepcopy(defaults), options or {})
@@ -445,6 +513,9 @@ function M.setup(options)
   validate_options(config)
 end
 
+---Enable Artist mode in a buffer.
+---@param bufnr? integer Defaults to the current buffer.
+---@param options? Artist.Options Session-local option overrides.
 function M.enable(bufnr, options)
   bufnr = resolve_buffer(bufnr)
   vim.validate("options", options, "table", true)
@@ -488,6 +559,8 @@ function M.enable(bufnr, options)
   vim.api.nvim_exec_autocmds("User", { pattern = "ArtistEnabled", modeline = false, data = { buf = bufnr } })
 end
 
+---Disable Artist mode in a buffer.
+---@param bufnr? integer Defaults to the current buffer.
 function M.disable(bufnr)
   local state
   state, bufnr = session_for(bufnr)
@@ -511,6 +584,9 @@ function M.disable(bufnr)
   vim.api.nvim_exec_autocmds("User", { pattern = "ArtistDisabled", modeline = false, data = { buf = bufnr } })
 end
 
+---Toggle Artist mode in a buffer.
+---@param bufnr? integer Defaults to the current buffer.
+---@param options? Artist.Options Session-local option overrides when enabling.
 function M.toggle(bufnr, options)
   bufnr = resolve_buffer(bufnr)
   if sessions[bufnr] then
@@ -520,15 +596,21 @@ function M.toggle(bufnr, options)
   end
 end
 
+---@param bufnr? integer
+---@return boolean
 function M.is_enabled(bufnr)
   return session_for(bufnr) ~= nil
 end
 
+---@param bufnr? integer
+---@return string?
 function M.get_tool(bufnr)
   local state = session_for(bufnr)
   return state and state.tool or nil
 end
 
+---@param name string
+---@param bufnr? integer
 function M.set_tool(name, bufnr)
   local resolved = registry.resolve(name)
   if not resolved then
@@ -551,13 +633,16 @@ function M.set_tool(name, bufnr)
   })
 end
 
+---@param bufnr? integer
 function M.shift_tool(bufnr)
   local state = session_for(bufnr)
   if state then
-    M.set_tool(registry.shifted(state.tool), bufnr)
+    M.set_tool(assert(registry.shifted(state.tool)), bufnr)
   end
 end
 
+---@param delta integer
+---@param bufnr? integer
 local function cycle_tool(delta, bufnr)
   local state = session_for(bufnr)
   if not state then
@@ -573,14 +658,18 @@ local function cycle_tool(delta, bufnr)
   M.set_tool(names[(index - 1 + delta) % #names + 1], bufnr)
 end
 
+---@param bufnr? integer
 function M.next_tool(bufnr)
   cycle_tool(1, bufnr)
 end
 
+---@param bufnr? integer
 function M.previous_tool(bufnr)
   cycle_tool(-1, bufnr)
 end
 
+---@param which 'first'|'second'
+---@param bufnr? integer
 function M.toggle_arrow(which, bufnr)
   local state = session_for(bufnr)
   if not state then
@@ -596,6 +685,9 @@ function M.toggle_arrow(which, bufnr)
   update_toolbar(state)
 end
 
+---@param name string
+---@param value any
+---@param bufnr? integer
 function M.set_option(name, value, bufnr)
   local state = session_for(bufnr)
   if not state then
@@ -612,8 +704,11 @@ function M.set_option(name, value, bufnr)
   update_toolbar(state)
 end
 
+---@param name 'line_character'|'fill_character'|'erase_character'
+---@param bufnr? integer
 function M.select_character(name, bufnr)
   local prompt = "Artist " .. name:gsub("_", " ") .. " (empty resets): "
+  ---@type string?
   local value = vim.fn.input(prompt)
   if value == "" then
     value = name == "erase_character" and " " or nil
@@ -621,6 +716,8 @@ function M.select_character(name, bufnr)
   M.set_option(name, value, bufnr)
 end
 
+---@param name string
+---@param bufnr? integer
 function M.toggle_setting(name, bufnr)
   local state = session_for(bufnr)
   if state then
@@ -628,15 +725,22 @@ function M.toggle_setting(name, bufnr)
   end
 end
 
+---@param bufnr? integer
 function M.toggle_first_arrow(bufnr)
   M.toggle_arrow("first", bufnr)
 end
 
+---@param bufnr? integer
 function M.toggle_second_arrow(bufnr)
   M.toggle_arrow("second", bufnr)
 end
 
 ---Execute an operation directly. Display-cell positions are one-based.
+---@param name string
+---@param from Artist.PositionLike
+---@param to? Artist.PositionLike
+---@param options? Artist.Options
+---@return Artist.Change[]
 function M.draw(name, from, to, options)
   options = options or {}
   local resolved = registry.resolve(name)
@@ -656,6 +760,8 @@ function M.draw(name, from, to, options)
   return transaction.changes
 end
 
+---@param bufnr? integer
+---@param shifted? boolean
 function M.mouse_down(bufnr, shifted)
   local state
   state, bufnr = session_for(bufnr)
@@ -667,10 +773,14 @@ function M.mouse_down(bufnr, shifted)
     return
   end
   state.keyboard_position = nil
-  local operation = shifted and registry.shifted(state.tool) or state.tool
-  local definition = registry.get(operation)
+  local operation = state.tool
+  if shifted then
+    operation = assert(registry.shifted(state.tool))
+  end
+  local definition = operation_definition(operation)
   if definition.kind == "one_point" then
     local transaction = new_transaction(state)
+    ---@type Artist.Options?
     local extra
     if operation == "text_see_through" or operation == "text_overwrite" then
       extra = { text = vim.fn.input("Artist text: ") }
@@ -685,7 +795,10 @@ function M.mouse_down(bufnr, shifted)
   end
   local transaction = definition.kind == "poly_point" and build_poly_transaction(state, nil, operation)
     or new_transaction(state)
-  local start = definition.kind == "poly_point" and state.anchor or position
+  local start = position
+  if definition.kind == "poly_point" then
+    start = assert(state.anchor)
+  end
   state.drag = { operation = operation, start = start, current = position, transaction = transaction }
   if definition.kind == "continuous" then
     execute(state, transaction, operation, position, position)
@@ -695,8 +808,9 @@ function M.mouse_down(bufnr, shifted)
   preview_operation(state, transaction, start, position, definition.kind)
   update_toolbar(state)
   if operation == "spray" and (state.options.timer_factory or vim.uv) then
-    state.timer = state.options.timer_factory and state.options.timer_factory() or vim.uv.new_timer()
-    state.timer:start(
+    local timer = state.options.timer_factory and state.options.timer_factory() or assert(vim.uv.new_timer())
+    state.timer = timer
+    timer:start(
       math.floor(state.options.spray_interval * 1000),
       math.floor(state.options.spray_interval * 1000),
       vim.schedule_wrap(function()
@@ -709,20 +823,23 @@ function M.mouse_down(bufnr, shifted)
   end
 end
 
+---@param bufnr? integer
 function M.shift_mouse_down(bufnr)
   M.mouse_down(bufnr, true)
 end
 
+---@param bufnr? integer
 function M.mouse_drag(bufnr)
   local state = session_for(bufnr)
   if not state or not state.drag then
     return
   end
+  local drag = assert(state.drag)
   local position = mouse_position(state.bufnr)
   if not position then
     return
   end
-  local drag, definition = state.drag, registry.get(state.drag.operation)
+  local definition = operation_definition(drag.operation)
   if definition.kind == "continuous" then
     execute(state, drag.transaction, drag.operation, drag.current, position)
   elseif definition.kind == "poly_point" then
@@ -735,13 +852,15 @@ function M.mouse_drag(bufnr)
   preview_operation(state, drag.transaction, drag.start, position, definition.kind)
 end
 
+---@param bufnr? integer
 function M.mouse_up(bufnr)
   local state = session_for(bufnr)
   if not state or not state.drag then
     return
   end
   stop_timer(state)
-  local drag, definition = state.drag, registry.get(state.drag.operation)
+  local drag = assert(state.drag)
+  local definition = operation_definition(drag.operation)
   local position = mouse_position(state.bufnr) or drag.current
   if definition.kind == "continuous" then
     execute(state, drag.transaction, drag.operation, drag.current, position)
@@ -753,9 +872,11 @@ function M.mouse_up(bufnr)
   end
   state.drag = nil
   if definition.kind == "poly_point" then
-    state.poly_points[#state.poly_points + 1] = position
-    state.anchor, state.transaction = position, build_poly_transaction(state, nil, drag.operation)
-    preview_operation(state, state.transaction, state.poly_points[1], position, definition.kind)
+    local poly_points = assert(state.poly_points)
+    poly_points[#poly_points + 1] = position
+    local transaction = build_poly_transaction(state, nil, drag.operation)
+    state.anchor, state.transaction = position, transaction
+    preview_operation(state, transaction, assert(poly_points[1]), position, definition.kind)
   elseif drag.operation == "spray_radius" then
     state.options.spray_radius = math.max(
       1,
@@ -768,12 +889,14 @@ function M.mouse_up(bufnr)
   update_toolbar(state)
 end
 
+---@param bufnr? integer
 function M.keyboard_point(bufnr)
   local state = session_for(bufnr)
   if not state then
     return
   end
-  local position, definition = state.keyboard_position or position_at_cursor(), registry.get(state.tool)
+  local position = state.keyboard_position or position_at_cursor()
+  local definition = operation_definition(state.tool)
   if definition.kind == "continuous" then
     if state.continuous_active then
       commit(state, state.transaction)
@@ -784,7 +907,9 @@ function M.keyboard_point(bufnr)
       state.anchor = position
     end
   elseif definition.kind == "one_point" then
-    local transaction, extra = new_transaction(state)
+    local transaction = new_transaction(state)
+    ---@type Artist.Options?
+    local extra
     if state.tool == "text_see_through" or state.tool == "text_overwrite" then
       extra = { text = vim.fn.input("Artist text: ") }
     end
@@ -795,11 +920,18 @@ function M.keyboard_point(bufnr)
       state.anchor, state.poly_points = position, { position }
       state.transaction = new_transaction(state)
     else
-      state.poly_points[#state.poly_points + 1] = position
+      local poly_points = assert(state.poly_points)
+      poly_points[#poly_points + 1] = position
       state.anchor = position
       state.transaction = build_poly_transaction(state)
     end
-    preview_operation(state, state.transaction, state.poly_points[1], position, definition.kind)
+    preview_operation(
+      state,
+      assert(state.transaction),
+      assert(state.poly_points and state.poly_points[1]),
+      position,
+      definition.kind
+    )
     if vim.v.count > 0 then
       M.finish(bufnr)
     end
@@ -817,6 +949,8 @@ function M.keyboard_point(bufnr)
   update_toolbar(state)
 end
 
+---@param motion 'h'|'j'|'k'|'l'
+---@param bufnr? integer
 function M.keyboard_move(motion, bufnr)
   local state = session_for(bufnr)
   if not state then
@@ -847,24 +981,27 @@ function M.keyboard_move(motion, bufnr)
       pcall(vim.fn.cursor, { visible_row, #line + 1, after.col - existing_width - 1 })
     end
   end
-  local definition = registry.get(state.tool)
+  local definition = operation_definition(state.tool)
   if definition.kind == "continuous" and state.continuous_active then
-    execute(state, state.transaction, state.tool, before, after)
-    preview_transaction(state, state.transaction)
+    local transaction = assert(state.transaction)
+    execute(state, transaction, state.tool, before, after)
+    preview_transaction(state, transaction)
     state.anchor = after
   elseif state.anchor and (definition.kind == "two_point" or definition.kind == "poly_point") then
+    local anchor = assert(state.anchor)
     local transaction
     if definition.kind == "poly_point" then
       transaction = build_poly_transaction(state, after)
     else
       transaction = new_transaction(state)
-      execute(state, transaction, state.tool, state.anchor, after)
+      execute(state, transaction, state.tool, anchor, after)
     end
-    preview_operation(state, transaction, state.anchor, after, definition.kind)
+    preview_operation(state, transaction, anchor, after, definition.kind)
     state.preview_transaction = transaction
   end
 end
 
+---@param bufnr? integer
 function M.finish(bufnr)
   local state = session_for(bufnr)
   if not state then
@@ -876,6 +1013,7 @@ function M.finish(bufnr)
   update_toolbar(state)
 end
 
+---@param bufnr? integer
 function M.cancel(bufnr)
   local state
   state, bufnr = session_for(bufnr)
@@ -889,6 +1027,7 @@ function M.cancel(bufnr)
   update_toolbar(state)
 end
 
+---@param bufnr? integer
 function M.pick_operation(bufnr)
   local state = session_for(bufnr)
   if not state then
@@ -898,7 +1037,7 @@ function M.pick_operation(bufnr)
   vim.ui.select(names, {
     prompt = "Artist operation",
     format_item = function(name)
-      return registry.get(name).label
+      return operation_definition(name).label
     end,
   }, function(choice)
     if choice then
@@ -907,6 +1046,7 @@ function M.pick_operation(bufnr)
   end)
 end
 
+---Create Artist commands and lifecycle autocommands.
 function M._create_commands()
   if augroup then
     return

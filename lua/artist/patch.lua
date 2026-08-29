@@ -1,13 +1,25 @@
 local grid = require("artist.grid")
 
 local M = {}
+---@class Artist.Patch
+---@field grid Artist.Grid
+---@field original Artist.Grid
+---@field changes Artist.Change[]
+---@field indexes table<string, integer>
+---@field trim boolean
 local Patch = {}
 Patch.__index = Patch
 
+---@param row integer
+---@param col integer
+---@return string
 local function key(row, col)
   return row .. ":" .. col
 end
 
+---@param incoming string
+---@param existing string
+---@return string
 function M.intersection(incoming, existing)
   if (existing == "-" and incoming == "|") or (existing == "|" and incoming == "-") then
     return "+"
@@ -24,6 +36,10 @@ function M.intersection(incoming, existing)
   return incoming
 end
 
+---@param line_character string
+---@param existing string
+---@param erase_character? string
+---@return string
 function M.unintersection(line_character, existing, erase_character)
   if line_character == "-" and existing == "+" then
     return "|"
@@ -39,11 +55,15 @@ function M.unintersection(line_character, existing, erase_character)
   return existing
 end
 
+---@param source integer|Artist.Grid
+---@param options? Artist.PatchOptions
+---@return Artist.Patch
 function Patch.new(source, options)
   options = options or {}
   if type(source) == "number" then
     source = grid.from_buffer(source)
   end
+  ---@cast source Artist.Grid
   return setmetatable({
     grid = source:clone(),
     original = source,
@@ -53,16 +73,23 @@ function Patch.new(source, options)
   }, Patch)
 end
 
+---@param row integer
+---@param col integer
+---@return string?
 function Patch:get(row, col)
   return self.grid:get(row, col)
 end
 
+---@param row integer
+---@param col integer
+---@param character string
+---@param options? Artist.PatchSetOptions
 function Patch:set(row, col, character, options)
   options = options or {}
   if row < 1 or col < 1 then
     return
   end
-  local before = self.grid:get(row, col)
+  local before = assert(self.grid:get(row, col))
   local after = options.intersect and M.intersection(character, before) or character
   self.grid:set(row, col, after)
   local id = key(row, col)
@@ -75,6 +102,9 @@ function Patch:set(row, col, character, options)
   end
 end
 
+---@param points? Artist.Point[]
+---@param options? Artist.PatchSetOptions
+---@return Artist.Patch
 function Patch:add(points, options)
   for _, value in ipairs(points or {}) do
     self:set(value.row, value.col, value.char, options)
@@ -82,6 +112,7 @@ function Patch:add(points, options)
   return self
 end
 
+---@return boolean
 function Patch:is_empty()
   for _, change in ipairs(self.changes) do
     if change.before ~= change.char then
@@ -91,6 +122,8 @@ function Patch:is_empty()
   return true
 end
 
+---@param bufnr integer
+---@return boolean
 function Patch:commit(bufnr)
   bufnr = bufnr == 0 and vim.api.nvim_get_current_buf() or bufnr
   if self:is_empty() then

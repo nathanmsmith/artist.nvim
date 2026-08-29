@@ -26,10 +26,14 @@ local directions = {
 
 local default_arrows = { ">", false, "v", "L", "<", false, "^", false }
 
+---@param value number
+---@return integer
 local function round(value)
   return math.floor(value + 0.5)
 end
 
+---@param position Artist.PositionLike
+---@return Artist.Position
 function M.normalize(position)
   assert(type(position) == "table", "artist: a position must be a table")
   local row = tonumber(position.row or position[1])
@@ -38,10 +42,19 @@ function M.normalize(position)
   return { row = math.max(1, math.floor(row)), col = math.max(1, math.floor(col)) }
 end
 
+---@param row integer
+---@param col integer
+---@param character string
+---@return Artist.Point
 local function point(row, col, character)
   return { row = row, col = col, char = character }
 end
 
+---@param x1 integer
+---@param y1 integer
+---@param x2 integer
+---@param y2 integer
+---@return integer
 local function octant(x1, y1, x2, y2)
   if x1 <= x2 then
     if y1 <= y2 then
@@ -54,6 +67,9 @@ local function octant(x1, y1, x2, y2)
   return -(x2 - x1) >= -(y2 - y1) and 5 or 6
 end
 
+---@param from Artist.PositionLike
+---@param to Artist.PositionLike
+---@return Artist.Position[]
 local function coordinates_for_line(from, to)
   from, to = M.normalize(from), M.normalize(to)
   local x1, y1, x2, y2 = from.col, from.row, to.col, to.row
@@ -73,6 +89,9 @@ local function coordinates_for_line(from, to)
   return result
 end
 
+---@param left Artist.Position
+---@param right Artist.Position
+---@return string
 local function character_between(left, right)
   if right.col > left.col then
     if right.row < left.row then
@@ -94,6 +113,9 @@ local function character_between(left, right)
   return "|"
 end
 
+---@param coordinates Artist.Position[]
+---@param character? string
+---@return Artist.Point[]
 local function add_characters(coordinates, character)
   local result = {}
   if #coordinates == 1 then
@@ -106,6 +128,9 @@ local function add_characters(coordinates, character)
   return result
 end
 
+---@param from Artist.Position
+---@param to Artist.Position
+---@return integer
 local function find_direction(from, to)
   local dx, dy = to.col - from.col, to.row - from.row
   if dx >= 2 * math.abs(dy) then
@@ -126,6 +151,11 @@ local function find_direction(from, to)
   return 8
 end
 
+---@param points Artist.Point[]
+---@param from Artist.Position
+---@param to Artist.Position
+---@param options Artist.Options
+---@return Artist.Point[]
 local function arrowed(points, from, to, options)
   if #points == 0 then
     return points
@@ -141,12 +171,20 @@ local function arrowed(points, from, to, options)
   return points
 end
 
+---@param from Artist.PositionLike
+---@param to Artist.PositionLike
+---@param options? Artist.Options
+---@return Artist.Point[]
 function M.line(from, to, options)
   options = options or {}
   from, to = M.normalize(from), M.normalize(to)
   return arrowed(add_characters(coordinates_for_line(from, to), options.line_character), from, to, options)
 end
 
+---@param from Artist.PositionLike
+---@param to Artist.PositionLike
+---@param options? Artist.Options
+---@return Artist.Point[]
 function M.straight_line(from, to, options)
   options = options or {}
   from, to = M.normalize(from), M.normalize(to)
@@ -169,6 +207,8 @@ function M.straight_line(from, to, options)
   return arrowed(result, from, actual_to, options)
 end
 
+---@param point_lists Artist.Point[][]
+---@return Artist.Point[]
 local function combine(point_lists)
   local result, indexes = {}, {}
   for _, list in ipairs(point_lists) do
@@ -186,6 +226,10 @@ local function combine(point_lists)
   return result
 end
 
+---@param from Artist.Position
+---@param to Artist.Position
+---@param character string
+---@return Artist.Point[]
 local function fill_rectangle(from, to, character)
   local result = {}
   for row = math.min(from.row, to.row) + 1, math.max(from.row, to.row) - 1 do
@@ -196,6 +240,10 @@ local function fill_rectangle(from, to, character)
   return result
 end
 
+---@param from Artist.PositionLike
+---@param to Artist.PositionLike
+---@param options? Artist.Options
+---@return Artist.Point[]
 function M.rectangle(from, to, options)
   options = options or {}
   from, to = M.normalize(from), M.normalize(to)
@@ -218,6 +266,11 @@ function M.rectangle(from, to, options)
   return result
 end
 
+---@param from Artist.PositionLike
+---@param to Artist.PositionLike
+---@param aspect_ratio? number
+---@return Artist.Position from
+---@return Artist.Position to
 function M.squarify(from, to, aspect_ratio)
   from, to = M.normalize(from), M.normalize(to)
   local dx, dy = to.col - from.col, to.row - from.row
@@ -229,12 +282,19 @@ function M.squarify(from, to, aspect_ratio)
   return from, { row = to.row, col = from.col + round(math.abs(dy) * sx * aspect) }
 end
 
+---@param from Artist.PositionLike
+---@param to Artist.PositionLike
+---@param options? Artist.Options
+---@return Artist.Point[]
 function M.square(from, to, options)
   options = options or {}
   local first, second = M.squarify(from, to, options.aspect_ratio)
   return M.rectangle(first, second, options)
 end
 
+---@param rx integer
+---@param ry integer
+---@return Artist.Position[]
 local function ellipse_quadrant(rx, ry)
   local rx2, ry2 = rx * rx, ry * ry
   local two_rx2, two_ry2 = 2 * rx2, 2 * ry2
@@ -265,6 +325,9 @@ local function ellipse_quadrant(rx, ry)
   return result
 end
 
+---@param quadrant Artist.Position[]
+---@param options Artist.Options
+---@return Artist.Point[]
 local function mirror_ellipse(quadrant, options)
   local characterized = add_characters(quadrant, options.line_character)
   if not options.line_character and characterized[#characterized].char == "/" then
@@ -288,6 +351,11 @@ local function mirror_ellipse(quadrant, options)
   return result
 end
 
+---@param center Artist.Position
+---@param rx integer
+---@param ry integer
+---@param options Artist.Options
+---@return Artist.Point[]
 local function ellipse_general(center, rx, ry, options)
   if ry == 0 and rx ~= 0 then
     local result = {}
@@ -318,6 +386,10 @@ local function ellipse_general(center, rx, ry, options)
   return result
 end
 
+---@param center Artist.PositionLike
+---@param through Artist.PositionLike
+---@param options? Artist.Options
+---@return Artist.Point[]
 function M.ellipse(center, through, options)
   options = options or {}
   center, through = M.normalize(center), M.normalize(through)
@@ -329,6 +401,10 @@ function M.ellipse(center, through, options)
   return ellipse_general(center, rx, ry, options)
 end
 
+---@param center Artist.PositionLike
+---@param through Artist.PositionLike
+---@param options? Artist.Options
+---@return Artist.Point[]
 function M.circle(center, through, options)
   options = options or {}
   center, through = M.normalize(center), M.normalize(through)
@@ -342,6 +418,10 @@ function M.circle(center, through, options)
   return ellipse_general(center, rx, ry, options)
 end
 
+---@param from Artist.PositionLike
+---@param to Artist.PositionLike
+---@param character string
+---@return Artist.Point[]
 function M.region(from, to, character)
   from, to = M.normalize(from), M.normalize(to)
   local result = {}

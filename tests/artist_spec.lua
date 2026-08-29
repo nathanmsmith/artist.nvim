@@ -161,6 +161,7 @@ local fake_mouse = {
   screenrow = 1,
   winid = mouse_winid,
 }
+---@diagnostic disable-next-line: duplicate-set-field
 vim.fn.getmousepos = function()
   return fake_mouse
 end

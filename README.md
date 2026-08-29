@@ -162,9 +162,11 @@ the `ArtistEnabled`, `ArtistDisabled`, and `ArtistToolChanged` `User` events.
 ## Development
 
 ```sh
+mise install
 make test
 make check
 ```
 
-Normal tests use checked-in fixtures and do not require Emacs or Figlet. See
+`make check` runs StyLua, LuaLS diagnostics, and the test suite. Normal tests
+use checked-in fixtures and do not require Emacs or Figlet. See
 `tests/oracle/README.md` to regenerate differential fixtures with Emacs.
