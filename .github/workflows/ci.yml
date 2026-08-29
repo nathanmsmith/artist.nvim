@@ -56,3 +56,33 @@ jobs:
           neovim: true
           version: ${{ matrix.neovim }}
       - run: make test
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+      - name: Install LuaRocks
+        run: sudo apt-get update && sudo apt-get install --yes liblua5.1-0-dev lua5.1 luarocks
+      - run: make coverage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: luacov.report.out
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          disable_search: true
+          fail_ci_if_error: true
+          files: ./luacov.report.out
+          use_oidc: true

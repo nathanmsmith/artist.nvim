@@ -1,3 +1,5 @@
 /deps/
+luacov.report.out
+luacov.stats.out
 .nvimlog
 nvim.log

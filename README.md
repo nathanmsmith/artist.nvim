@@ -1,6 +1,7 @@
 # artist.nvim
 
 [![CI](https://github.com/nathanmsmith/artist.nvim/actions/workflows/ci.yml/badge.svg)](https://github.com/nathanmsmith/artist.nvim/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/nathanmsmith/artist.nvim/graph/badge.svg)](https://codecov.io/gh/nathanmsmith/artist.nvim)
 
 [GNU Emacs Artist mode](https://github.com/emacs-mirror/emacs/blob/f4f249a2249a7047ba41a659b8fcdcd7e1caf4e0/lisp/textmodes/artist.el), faithfully ported to Neovim.
 
@@ -181,3 +182,13 @@ make test-file FILE=tests/test_grid.lua
 `make check` runs StyLua, LuaLS diagnostics, and the full test suite. Normal
 tests use checked-in fixtures and do not require Emacs or Figlet. See
 `tests/oracle/README.md` to regenerate differential fixtures with Emacs.
+
+To compute line coverage for the plugin code, install LuaRocks and run:
+
+```sh
+make coverage
+```
+
+This installs the pinned LuaCov version under `deps/`, instruments both the
+test runner and child Neovim processes, and writes the detailed results to
+`luacov.report.out`.

@@ -1,0 +1,13 @@
+return {
+  modules = {
+    ["artist"] = "lua/artist/init.lua",
+    ["artist.*"] = "lua",
+  },
+  include = {
+    "lua/artist$",
+    "lua/artist/.+$",
+  },
+  includeuntestedfiles = {
+    "lua/artist",
+  },
+}
