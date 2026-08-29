@@ -41,23 +41,67 @@ equal({ "+---+", "|   |", "+---+" }, vim.api.nvim_buf_get_lines(0, 0, -1, false)
 artist.draw("erase", { 2, 2 }, { 2, 4 })
 equal({ "+---+", "|   |", "+---+" }, vim.api.nvim_buf_get_lines(0, 0, -1, false), "erasing spaces preserves dimensions")
 
-reset({ "", "", "" })
+reset({ "" })
 local original_getmousepos = vim.fn.getmousepos
-local fake_mouse = { line = 1, column = 1, coladd = 0, winid = vim.api.nvim_get_current_win() }
+local mouse_winid = vim.api.nvim_get_current_win()
+local first_screen_row = vim.fn.screenpos(mouse_winid, 1, 1).row
+local fake_mouse = {
+  line = 1,
+  column = 1,
+  coladd = 0,
+  screenrow = first_screen_row,
+  winid = mouse_winid,
+}
 vim.fn.getmousepos = function()
   return fake_mouse
 end
 artist.enable()
 artist.mouse_down()
-fake_mouse = { line = 3, column = 1, coladd = 4, winid = vim.api.nvim_get_current_win() }
+fake_mouse = {
+  line = 1,
+  column = 1,
+  coladd = 4,
+  screenrow = first_screen_row + 2,
+  winid = mouse_winid,
+}
+artist.mouse_drag()
+local drag_marks = vim.api.nvim_buf_get_extmarks(0, -1, 0, -1, { details = true })
+equal(2, #drag_marks, "drag previews rows below the buffer")
+local virtual_line_count = 0
+for _, mark in ipairs(drag_marks) do
+  if mark[4].virt_lines then
+    virtual_line_count = #mark[4].virt_lines
+  end
+end
+equal(2, virtual_line_count, "preview includes each virtual canvas row")
+artist.mouse_up()
+artist.disable()
+equal({ "\\", " \\-", "   \\-" }, vim.api.nvim_buf_get_lines(0, 0, -1, false), "mouse drag uses virtual columns")
+
+reset({ "" })
+fake_mouse = { line = 1, column = 1, coladd = 0, screenrow = first_screen_row, winid = mouse_winid }
+artist.enable()
+artist.mouse_down()
+fake_mouse = { line = 1, column = 1, coladd = 0, screenrow = first_screen_row + 2, winid = mouse_winid }
 artist.mouse_drag()
 artist.mouse_up()
 artist.disable()
+equal({ "|", "|", "|" }, vim.api.nvim_buf_get_lines(0, 0, -1, false), "mouse drag uses virtual rows")
+
+reset({ "" })
+fake_mouse = { line = 1, column = 1, coladd = 0, screenrow = first_screen_row, winid = mouse_winid }
+artist.enable()
+artist.mouse_down()
+fake_mouse = { line = 1, column = 1, coladd = 4, screenrow = first_screen_row, winid = mouse_winid }
+artist.mouse_drag()
+artist.mouse_up()
+artist.disable()
+equal({ "-----" }, vim.api.nvim_buf_get_lines(0, 0, -1, false), "mouse drag preserves horizontal drawing")
 vim.fn.getmousepos = original_getmousepos
-equal({ "\\", " \\-", "   \\-" }, vim.api.nvim_buf_get_lines(0, 0, -1, false), "mouse drag uses virtual columns")
 
 local old_mouse = vim.o.mouse
 local old_virtualedit = vim.wo.virtualedit
+local old_wrap = vim.wo.wrap
 vim.keymap.set("n", "<CR>", ":let g:artist_original_mapping = 1<CR>", { buffer = true })
 local old_enter_mapping = vim.fn.maparg("<CR>", "n", false, true).rhs
 artist.enable()
@@ -74,6 +118,7 @@ artist.disable()
 equal(false, artist.is_enabled(), "mode disables")
 equal(old_mouse, vim.o.mouse, "mouse option restores")
 equal(old_virtualedit, vim.wo.virtualedit, "virtualedit restores")
+equal(old_wrap, vim.wo.wrap, "wrap restores")
 equal(old_enter_mapping, vim.fn.maparg("<CR>", "n", false, true).rhs, "buffer mapping restores")
 vim.keymap.del("n", "<CR>", { buffer = true })
 

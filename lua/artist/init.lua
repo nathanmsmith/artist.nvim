@@ -66,12 +66,21 @@ local function mouse_position(bufnr)
   local coladd = value.coladd or 0
   pcall(vim.fn.cursor, { value.line, value.column, coladd })
 
+  local row = value.line
+  local line_count = vim.api.nvim_buf_line_count(bufnr)
+  if row == line_count then
+    local last_position = vim.fn.screenpos(value.winid, line_count, 1)
+    if last_position.row > 0 and value.screenrow > last_position.row then
+      row = row + value.screenrow - last_position.row
+    end
+  end
+
   -- `column` stops at one byte past the end of the line. Horizontal mouse
   -- movement in virtual space is reported separately in `coladd`.
   local line = vim.api.nvim_buf_get_lines(bufnr, value.line - 1, value.line, false)[1] or ""
   local prefix = line:sub(1, value.column - 1)
   local character_column = vim.fn.strchars(prefix) + 1
-  return { row = value.line, col = character_column + coladd }
+  return { row = row, col = character_column + coladd }
 end
 
 local function points_for(state, from, to)
@@ -100,6 +109,7 @@ local function preview(bufnr, points)
     row[value.col] = value.char
   end
   local line_count = vim.api.nvim_buf_line_count(bufnr)
+  local last_virtual_row = line_count
   for row_number, replacements in pairs(by_row) do
     if row_number <= line_count then
       local line = vim.api.nvim_buf_get_lines(bufnr, row_number - 1, row_number, false)[1] or ""
@@ -119,7 +129,29 @@ local function preview(bufnr, points)
         hl_mode = "combine",
         priority = 200,
       })
+    else
+      last_virtual_row = math.max(last_virtual_row, row_number)
     end
+  end
+  if last_virtual_row > line_count then
+    local virtual_lines = {}
+    for row_number = line_count + 1, last_virtual_row do
+      local replacements = by_row[row_number] or {}
+      local last = 0
+      for col in pairs(replacements) do
+        last = math.max(last, col)
+      end
+      local rendered = {}
+      for col = 1, last do
+        rendered[col] = replacements[col] or " "
+      end
+      virtual_lines[#virtual_lines + 1] = { { table.concat(rendered), "ArtistPreview" } }
+    end
+    vim.api.nvim_buf_set_extmark(bufnr, namespace, line_count - 1, 0, {
+      virt_lines = virtual_lines,
+      virt_lines_above = false,
+      priority = 200,
+    })
   end
 end
 
@@ -190,13 +222,16 @@ function M.enable(bufnr, options)
     options = effective,
     previous = {
       virtualedit = {},
+      wrap = {},
     },
   }
   sessions[bufnr] = state
   for _, winid in ipairs(vim.api.nvim_list_wins()) do
     if vim.api.nvim_win_get_buf(winid) == bufnr then
       state.previous.virtualedit[winid] = vim.wo[winid].virtualedit
+      state.previous.wrap[winid] = vim.wo[winid].wrap
       vim.wo[winid].virtualedit = "all"
+      vim.wo[winid].wrap = false
     end
   end
   original_mouse = original_mouse or vim.o.mouse
@@ -225,6 +260,7 @@ function M.disable(bufnr)
   for winid, value in pairs(state.previous.virtualedit) do
     if vim.api.nvim_win_is_valid(winid) then
       vim.wo[winid].virtualedit = value
+      vim.wo[winid].wrap = state.previous.wrap[winid]
     end
   end
   -- 'mouse' is global. Restore it only if no other Artist session needs it.

@@ -71,9 +71,9 @@ Artist mode installs these normal-mode buffer mappings:
 | `<CR>` | Place the first corner/end point, then draw to the cursor |
 | `<C-c>` | Cancel the current preview |
 
-The cursor can move past the end of a line while Artist mode is active. Artist
-restores `virtualedit`, `mouse`, and any displaced buffer-local mappings when
-the mode is disabled.
+The cursor can move past the end of a line or below the end of the buffer while
+Artist mode is active. Artist restores `virtualedit`, `wrap`, `mouse`, and any
+displaced buffer-local mappings when the mode is disabled.
 
 Commands:
 
