@@ -1,5 +1,6 @@
 ---@meta
 
+---Row and column position
 ---@class Artist.Position
 ---@field row integer One-based display row.
 ---@field col integer One-based display column.

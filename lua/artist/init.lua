@@ -411,6 +411,7 @@ local function operation_definition(name)
   return assert(registry.get(name), "artist: unknown operation " .. name)
 end
 
+---Clear the rendered preview from a buffer without modifying its contents.
 ---@param bufnr integer
 local function clear_preview(bufnr)
   if vim.api.nvim_buf_is_valid(bufnr) then
@@ -418,12 +419,14 @@ local function clear_preview(bufnr)
   end
 end
 
+---Get the position of the cursor
 ---@return Artist.Position
 local function position_at_cursor()
   local cursor = vim.api.nvim_win_get_cursor(0)
   return { row = cursor[1], col = vim.fn.virtcol(".") }
 end
 
+---Get the position of the mouse in a buffer.
 ---@param bufnr integer
 ---@return Artist.Position?
 local function mouse_position(bufnr)
