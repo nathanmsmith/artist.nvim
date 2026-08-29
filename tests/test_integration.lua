@@ -69,6 +69,12 @@ T["preview beyond non-whitespace text keeps its virtual column and highlight"] =
   eq(marks[1][4].hl_mode, "replace")
 end
 
+T["preview uses a subdued highlight"] = function()
+  child.cmd("runtime plugin/artist.lua")
+
+  eq(child.api.nvim_get_hl(0, { name = "ArtistPreview", link = true }).link, "Comment")
+end
+
 T["mouse drag uses virtual columns and rows"] = function()
   local winid = child.api.nvim_get_current_win()
   child.lua([[artist.enable(0, { tool = "line" })]])
