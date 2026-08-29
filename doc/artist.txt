@@ -1,0 +1,111 @@
+*artist.txt*                       Draw ASCII diagrams in Neovim
+
+==============================================================================
+CONTENTS                                                        *artist-contents*
+
+1. Introduction                                      |artist-introduction|
+2. Commands                                              |artist-commands|
+3. Mappings                                              |artist-mappings|
+4. Configuration                                    |artist-configuration|
+5. Lua API                                                  |artist-api|
+
+==============================================================================
+1. INTRODUCTION                                          *artist-introduction*
+
+artist.nvim brings an Artist-style drawing mode to any Neovim buffer. It can
+draw lines, rectangles, ellipses, freehand strokes, and erased regions. A
+mouse drag is shown as a non-destructive preview and committed on release.
+
+Coordinates in the Lua API are one-based, just like line numbers displayed by
+Neovim. Shapes may extend the buffer down or extend a line to the right.
+
+==============================================================================
+2. COMMANDS                                                  *artist-commands*
+
+                                                        *:Artist*
+:Artist [enable|disable|toggle|{tool}]
+    With no argument, toggle Artist mode in the current buffer. A tool name
+    changes the current tool.
+
+                                                        *:ArtistEnable*
+:ArtistEnable
+    Enable Artist mode in the current buffer.
+
+                                                        *:ArtistDisable*
+:ArtistDisable
+    Disable Artist mode and cancel an active preview.
+
+                                                        *:ArtistToggle*
+:ArtistToggle
+    Toggle Artist mode in the current buffer.
+
+                                                        *:ArtistTool*
+:ArtistTool {tool}
+    Select line, rectangle, ellipse, freehand, or erase.
+
+==============================================================================
+3. MAPPINGS                                                  *artist-mappings*
+
+The mappings below exist only while Artist mode is enabled:
+
+    <LeftMouse>       Start a shape
+    <LeftDrag>        Update its preview
+    <LeftRelease>     Commit it
+    <CR>              Place or finish a keyboard endpoint
+    <C-c>             Cancel an unfinished shape
+
+Mappings can be disabled with `mappings = false`. Existing buffer-local
+mappings are restored when Artist mode ends.
+
+==============================================================================
+4. CONFIGURATION                                        *artist-configuration*
+
+Setup is optional: >lua
+
+    require("artist").setup({
+      tool = "line",
+      aspect_ratio = 1,
+      pen_character = "*",
+      mappings = true,
+    })
+<
+`tool` is the initially selected tool. `aspect_ratio` affects ellipse sampling.
+`pen_character` is used by freehand drawing. `mappings` controls installation
+of the default mappings.
+
+==============================================================================
+5. LUA API                                                      *artist-api*
+
+enable([{bufnr}], [{options}])                          *artist.enable()*
+    Enable Artist mode. Zero and nil select the current buffer.
+
+disable([{bufnr}])                                     *artist.disable()*
+toggle([{bufnr}], [{options}])                          *artist.toggle()*
+is_enabled([{bufnr}])                               *artist.is_enabled()*
+    Manage or query the buffer-local mode.
+
+set_tool({tool}, [{bufnr}])                            *artist.set_tool()*
+get_tool([{bufnr}])                                    *artist.get_tool()*
+    Change or query the active tool.
+
+cancel([{bufnr}])                                        *artist.cancel()*
+    Cancel the active mouse drag or keyboard endpoint.
+
+draw({tool}, {from}, {to}, [{options}])                   *artist.draw()*
+    Draw directly without enabling the mode. `from` and `to` are one-based
+    `{ row, col }` tables (array-style `{ row, col }` is also accepted).
+    Options may contain `bufnr`, `aspect_ratio`, `pen_character`, or
+    `overwrite`.
+
+User events: >lua
+
+    vim.api.nvim_create_autocmd("User", {
+      pattern = "ArtistToolChanged",
+      callback = function(event)
+        print(event.data.tool)
+      end,
+    })
+<
+The events are ArtistEnabled, ArtistDisabled, and ArtistToolChanged.
+
+vim:tw=78:ts=8:noet:ft=help:norl:
