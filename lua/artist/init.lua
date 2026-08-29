@@ -39,6 +39,8 @@ local defaults = {
   figlet_font = "standard",
   rectangle_register = '"',
   mappings = true,
+  keymaps = {},
+  show_palette_on_enable = true,
   mouse_wheel = false,
   winbar = true,
   transparent_selection = true,
@@ -49,10 +51,247 @@ local config = vim.deepcopy(defaults)
 ---@type table<integer, Artist.Session>
 local sessions = {}
 local namespace = vim.api.nvim_create_namespace("artist.nvim")
+local palette_namespace = vim.api.nvim_create_namespace("artist.nvim.palette")
 local augroup
 local original_mouse
 
-local mapping_definitions = {
+-- This is intentionally ordered: it is the source of truth for mappings,
+-- palette presentation, and tool traversal.
+local key_spec = {
+  {
+    action = "pen",
+    lhs = "b",
+    method = "select_tool",
+    arg = "pen",
+    label = "Pen",
+    shifted = "pen_line",
+    group = "tools",
+  },
+  {
+    action = "pen_line",
+    lhs = "B",
+    method = "select_tool",
+    arg = "pen_line",
+    label = "Pen Line",
+    shifted = "pen",
+    group = "tools",
+  },
+  {
+    action = "line",
+    lhs = "l",
+    method = "select_tool",
+    arg = "line",
+    label = "Line",
+    shifted = "straight_line",
+    group = "tools",
+  },
+  {
+    action = "straight_line",
+    lhs = "L",
+    method = "select_tool",
+    arg = "straight_line",
+    label = "Straight Line",
+    shifted = "line",
+    group = "tools",
+  },
+  {
+    action = "poly_line",
+    lhs = "m",
+    method = "select_tool",
+    arg = "poly_line",
+    label = "Poly-line",
+    shifted = "straight_poly_line",
+    group = "tools",
+  },
+  {
+    action = "straight_poly_line",
+    lhs = "M",
+    method = "select_tool",
+    arg = "straight_poly_line",
+    label = "Straight Poly-line",
+    shifted = "poly_line",
+    group = "tools",
+  },
+  {
+    action = "rectangle",
+    lhs = "r",
+    method = "select_tool",
+    arg = "rectangle",
+    label = "Rectangle",
+    shifted = "square",
+    group = "tools",
+  },
+  {
+    action = "square",
+    lhs = "R",
+    method = "select_tool",
+    arg = "square",
+    label = "Square",
+    shifted = "rectangle",
+    group = "tools",
+  },
+  {
+    action = "ellipse",
+    lhs = "e",
+    method = "select_tool",
+    arg = "ellipse",
+    label = "Ellipse",
+    shifted = "circle",
+    group = "tools",
+  },
+  {
+    action = "circle",
+    lhs = "E",
+    method = "select_tool",
+    arg = "circle",
+    label = "Circle",
+    shifted = "ellipse",
+    group = "tools",
+  },
+  {
+    action = "spray",
+    lhs = "s",
+    method = "select_tool",
+    arg = "spray",
+    label = "Spray",
+    shifted = "spray_radius",
+    group = "tools",
+  },
+  {
+    action = "spray_radius",
+    lhs = "S",
+    method = "select_tool",
+    arg = "spray_radius",
+    label = "Spray Radius",
+    shifted = "spray",
+    group = "tools",
+  },
+  {
+    action = "text_see_through",
+    lhs = "t",
+    method = "select_tool",
+    arg = "text_see_through",
+    label = "Text",
+    shifted = "text_overwrite",
+    group = "tools",
+  },
+  {
+    action = "text_overwrite",
+    lhs = "T",
+    method = "select_tool",
+    arg = "text_overwrite",
+    label = "Text Overwrite",
+    shifted = "text_see_through",
+    group = "tools",
+  },
+  {
+    action = "erase_character",
+    lhs = "x",
+    method = "select_tool",
+    arg = "erase_character",
+    label = "Erase Character",
+    shifted = "erase_rectangle",
+    group = "tools",
+  },
+  {
+    action = "erase_rectangle",
+    lhs = "X",
+    method = "select_tool",
+    arg = "erase_rectangle",
+    label = "Erase Rectangle",
+    shifted = "erase_character",
+    group = "tools",
+  },
+  {
+    action = "vaporize_line",
+    lhs = "v",
+    method = "select_tool",
+    arg = "vaporize_line",
+    label = "Vaporize Line",
+    shifted = "vaporize_lines",
+    group = "tools",
+  },
+  {
+    action = "vaporize_lines",
+    lhs = "V",
+    method = "select_tool",
+    arg = "vaporize_lines",
+    label = "Vaporize Connected",
+    shifted = "vaporize_line",
+    group = "tools",
+  },
+  {
+    action = "cut_rectangle",
+    lhs = "d",
+    method = "select_tool",
+    arg = "cut_rectangle",
+    label = "Cut Rectangle",
+    shifted = "cut_square",
+    group = "tools",
+  },
+  {
+    action = "cut_square",
+    lhs = "D",
+    method = "select_tool",
+    arg = "cut_square",
+    label = "Cut Square",
+    shifted = "cut_rectangle",
+    group = "tools",
+  },
+  {
+    action = "copy_rectangle",
+    lhs = "y",
+    method = "select_tool",
+    arg = "copy_rectangle",
+    label = "Copy Rectangle",
+    shifted = "copy_square",
+    group = "tools",
+  },
+  {
+    action = "copy_square",
+    lhs = "Y",
+    method = "select_tool",
+    arg = "copy_square",
+    label = "Copy Square",
+    shifted = "copy_rectangle",
+    group = "tools",
+  },
+  { action = "paste", lhs = "p", method = "select_tool", arg = "paste", label = "Paste", group = "tools" },
+  {
+    action = "flood_fill",
+    lhs = "f",
+    method = "select_tool",
+    arg = "flood_fill",
+    label = "Flood Fill",
+    group = "tools",
+  },
+  { action = "previous_tool", lhs = "[a", method = "previous_tool", label = "Previous tool", group = "controls" },
+  { action = "next_tool", lhs = "]a", method = "next_tool", label = "Next tool", group = "controls" },
+  { action = "shift_tool", lhs = "~", method = "shift_tool", label = "Shift tool", group = "controls" },
+  { action = "palette", lhs = "?", method = "toggle_palette", label = "Key palette", group = "controls" },
+  { action = "options_palette", lhs = "o", method = "show_options_palette", label = "Options", group = "controls" },
+  { action = "keyboard_point", lhs = "<CR>", method = "keyboard_point", label = "Set point", group = "controls" },
+  { action = "finish", lhs = "<C-CR>", method = "finish", label = "Finish", group = "controls" },
+  {
+    action = "toggle_first_arrow",
+    lhs = "<",
+    method = "toggle_first_arrow",
+    label = "First arrow",
+    group = "controls",
+  },
+  {
+    action = "toggle_second_arrow",
+    lhs = ">",
+    method = "toggle_second_arrow",
+    label = "Second arrow",
+    group = "controls",
+  },
+  { action = "cancel", lhs = "<Esc>", method = "cancel", label = "Cancel", group = "controls" },
+  { action = "cancel_ctrl", lhs = "<C-c>", method = "cancel", label = "Cancel", group = "controls" },
+  { action = "disable", lhs = "<C-c><C-c>", method = "disable", label = "Exit Artist", group = "controls" },
+}
+
+local mouse_mapping_definitions = {
   { "<LeftMouse>", "mouse_down" },
   { "<LeftDrag>", "mouse_drag" },
   { "<LeftRelease>", "mouse_up" },
@@ -63,47 +302,12 @@ local mapping_definitions = {
   { "<S-MiddleMouse>", "pick_operation" },
   { "<RightMouse>", "pick_operation" },
   { "<S-RightMouse>", "pick_operation" },
-  { "<CR>", "keyboard_point" },
-  { "<C-CR>", "finish" },
-  { "<", "toggle_first_arrow" },
-  { ">", "toggle_second_arrow" },
-  { "<C-c>", "cancel" },
-  { "<C-c><C-c>", "disable" },
-  { "<C-c><C-a><C-o>", "pick_operation" },
-  { "<C-c><C-a><C-e>", "select_character", "erase_character" },
-  { "<C-c><C-a><C-f>", "select_character", "fill_character" },
-  { "<C-c><C-a><C-l>", "select_character", "line_character" },
-  { "<C-c><C-a><C-r>", "toggle_setting", "rubber_banding" },
-  { "<C-c><C-a><C-t>", "toggle_setting", "trim_line_endings" },
-  { "<C-c><C-a><C-s>", "toggle_setting", "borderless_shapes" },
-  { "<C-c><C-a>l", "select_tool", "line" },
-  { "<C-c><C-a>L", "select_tool", "straight_line" },
-  { "<C-c><C-a>r", "select_tool", "rectangle" },
-  { "<C-c><C-a>R", "select_tool", "square" },
-  { "<C-c><C-a>s", "select_tool", "square" },
-  { "<C-c><C-a>p", "select_tool", "poly_line" },
-  { "<C-c><C-a>P", "select_tool", "straight_poly_line" },
-  { "<C-c><C-a>e", "select_tool", "ellipse" },
-  { "<C-c><C-a>c", "select_tool", "circle" },
-  { "<C-c><C-a>t", "select_tool", "text_see_through" },
-  { "<C-c><C-a>T", "select_tool", "text_overwrite" },
-  { "<C-c><C-a>S", "select_tool", "spray" },
-  { "<C-c><C-a>z", "select_tool", "spray_radius" },
-  { "<C-c><C-a><C-d>", "select_tool", "erase_character" },
-  { "<C-c><C-a>E", "select_tool", "erase_rectangle" },
-  { "<C-c><C-a>v", "select_tool", "vaporize_line" },
-  { "<C-c><C-a>V", "select_tool", "vaporize_lines" },
-  { "<C-c><C-a><C-k>", "select_tool", "cut_rectangle" },
-  { "<C-c><C-a><M-w>", "select_tool", "copy_rectangle" },
-  { "<C-c><C-a><C-y>", "select_tool", "paste" },
-  { "<C-c><C-a>f", "select_tool", "flood_fill" },
 }
 
 local movement_mappings = {
   { "h", "h" },
   { "j", "j" },
   { "k", "k" },
-  { "l", "l" },
   { "<Left>", "h" },
   { "<Down>", "j" },
   { "<Up>", "k" },
@@ -411,10 +615,123 @@ local function update_toolbar(state)
   end
 end
 
+local option_actions = {
+  e = { "select_character", "erase_character" },
+  f = { "select_character", "fill_character" },
+  l = { "select_character", "line_character" },
+  r = { "toggle_setting", "rubber_banding" },
+  t = { "toggle_setting", "trim_line_endings" },
+  s = { "toggle_setting", "borderless_shapes" },
+}
+
+---@param state Artist.Session
+local function close_palette(state)
+  if state.palette_win and vim.api.nvim_win_is_valid(state.palette_win) then
+    pcall(vim.api.nvim_win_close, state.palette_win, true)
+  end
+  state.palette_win, state.palette_buf, state.palette_kind = nil, nil, nil
+end
+
+---@param state Artist.Session
+---@param kind 'main'|'options'
+local function show_palette(state, kind)
+  close_palette(state)
+  local owner = vim.fn.bufwinid(state.bufnr)
+  -- A palette belongs to the visible, current session only.  This avoids a
+  -- background enable unexpectedly putting a float over another buffer.
+  if owner == -1 or owner ~= vim.api.nvim_get_current_win() then
+    return
+  end
+  local lines = {}
+  if kind == "options" then
+    lines = {
+      " Artist options (Esc closes)",
+      " e erase character   f fill character   l line character",
+      " r rubber banding     t trim whitespace   s borderless shapes",
+    }
+  else
+    lines = { " Artist keys (? closes)" }
+    local row = {}
+    for _, item in ipairs(key_spec) do
+      if item.group == "tools" then
+        row[#row + 1] = string.format("%-2s %-18s", item.lhs, item.label)
+        if #row == 2 then
+          lines[#lines + 1] = " " .. table.concat(row, "  ")
+          row = {}
+        end
+      end
+    end
+    if #row > 0 then
+      lines[#lines + 1] = " " .. table.concat(row, "  ")
+    end
+    lines[#lines + 1] = " [a/]a previous/next   ~ shifted   o options   <Esc> cancel   <C-c><C-c> exit"
+  end
+  local width = 1
+  for _, line in ipairs(lines) do
+    width = math.max(width, vim.fn.strdisplaywidth(line))
+  end
+  local height = #lines
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[buf].bufhidden = "wipe"
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  local win = vim.api.nvim_open_win(buf, false, {
+    relative = "editor",
+    anchor = "SW",
+    row = vim.o.lines - 2,
+    col = math.max(0, math.floor((vim.o.columns - width) / 2)),
+    width = math.min(width, math.max(20, vim.o.columns - 2)),
+    height = height,
+    style = "minimal",
+    focusable = false,
+    zindex = 200,
+    border = "rounded",
+    noautocmd = true,
+  })
+  vim.wo[win].winblend = 0
+  vim.api.nvim_buf_set_extmark(buf, palette_namespace, 0, 0, { end_row = 0, hl_group = "ArtistMode", hl_eol = true })
+  if kind == "main" then
+    local active_label = state.tool
+    for _, item in ipairs(key_spec) do
+      if item.arg == state.tool then
+        active_label = item.label
+        break
+      end
+    end
+    for line_no, line in ipairs(lines) do
+      local start = line:find(active_label, 1, true)
+      if start then
+        vim.api.nvim_buf_set_extmark(buf, palette_namespace, line_no - 1, start - 1, {
+          end_row = line_no - 1,
+          hl_group = "ArtistTool",
+          hl_eol = true,
+        })
+      end
+    end
+  end
+  state.palette_win, state.palette_buf, state.palette_kind = win, buf, kind
+end
+
+---@param state Artist.Session
+local function refresh_palette(state)
+  if state.palette_kind == "main" then
+    show_palette(state, "main")
+  end
+end
+
 ---@param state Artist.Session
 ---@return table[]
 local function all_mapping_definitions(state)
-  local result = vim.deepcopy(mapping_definitions)
+  local result = {}
+  for _, item in ipairs(key_spec) do
+    local lhs = state.options.keymaps[item.action]
+    if lhs == nil then
+      lhs = item.lhs
+    end
+    if lhs ~= false then
+      result[#result + 1] = { lhs, item.method, item.arg, item.action }
+    end
+  end
+  vim.list_extend(result, vim.deepcopy(mouse_mapping_definitions))
   for _, value in ipairs(movement_mappings) do
     result[#result + 1] = value
   end
@@ -434,10 +751,23 @@ local function save_mapping(lhs)
   end
 end
 
+local function mapping_disabled_by_global()
+  return vim.g.no_plugin_maps == true
+    or vim.g.no_plugin_maps == 1
+    or vim.g.artist_no_mappings == true
+    or vim.g.artist_no_mappings == 1
+end
+
+---@param state Artist.Session
+---@return boolean
+local function concrete_mappings_enabled(state)
+  return state.options.mappings ~= false and not mapping_disabled_by_global()
+end
+
 ---@param bufnr integer
 ---@param state Artist.Session
 local function install_mappings(bufnr, state)
-  if not state.options.mappings then
+  if not concrete_mappings_enabled(state) then
     return
   end
   state.saved_mappings = {}
@@ -448,10 +778,18 @@ local function install_mappings(bufnr, state)
       state.saved_mappings[lhs] = save_mapping(lhs)
       if #definition == 2 and (method == "h" or method == "j" or method == "k" or method == "l") then
         vim.keymap.set("n", lhs, function()
+          close_palette(state)
           M.keyboard_move(method, bufnr)
         end, { buffer = bufnr, silent = true, nowait = true, desc = "Artist: move and draw" })
       elseif method == "select_tool" then
         vim.keymap.set("n", lhs, function()
+          if state.palette_kind == "options" and option_actions[lhs] then
+            local action = option_actions[lhs]
+            close_palette(state)
+            M[action[1]](action[2], bufnr)
+            return
+          end
+          close_palette(state)
           M.set_tool(definition[3], bufnr)
         end, { buffer = bufnr, silent = true, nowait = true, desc = "Artist: select " .. definition[3] })
       elseif method == "select_character" or method == "toggle_setting" then
@@ -460,6 +798,30 @@ local function install_mappings(bufnr, state)
         end, { buffer = bufnr, silent = true, nowait = true, desc = "Artist: configure " .. definition[3] })
       else
         vim.keymap.set("n", lhs, function()
+          if state.palette_kind == "options" then
+            if lhs == "<Esc>" then
+              close_palette(state)
+              return
+            end
+            if option_actions[lhs] then
+              local action = option_actions[lhs]
+              close_palette(state)
+              M[action[1]](action[2], bufnr)
+              return
+            end
+          end
+          if method == "toggle_palette" then
+            if state.palette_kind then
+              close_palette(state)
+            else
+              show_palette(state, "main")
+            end
+            return
+          elseif method == "show_options_palette" then
+            show_palette(state, "options")
+            return
+          end
+          close_palette(state)
           M[method](bufnr)
         end, {
           buffer = bufnr,
@@ -475,7 +837,7 @@ end
 ---@param bufnr integer
 ---@param state Artist.Session
 local function remove_mappings(bufnr, state)
-  if not state.options.mappings then
+  if not state.mapping_definitions then
     return
   end
   vim.api.nvim_buf_call(bufnr, function()
@@ -499,6 +861,12 @@ local function validate_options(options)
       error("artist: " .. name .. " must be one character or nil")
     end
   end
+  if options.keymaps ~= nil and type(options.keymaps) ~= "table" then
+    error("artist: keymaps must be a table")
+  end
+  if options.show_palette_on_enable ~= nil and type(options.show_palette_on_enable) ~= "boolean" then
+    error("artist: show_palette_on_enable must be a boolean")
+  end
 end
 
 ---Configure defaults for future Artist sessions and direct draw calls.
@@ -512,6 +880,7 @@ function M.setup(options)
   end
   config.tool = resolved
   validate_options(config)
+  M._install_global_mappings()
 end
 
 ---Enable Artist mode in a buffer.
@@ -558,6 +927,9 @@ function M.enable(bufnr, options)
   vim.b[bufnr].artist_enabled = true
   vim.b[bufnr].artist_tool = state.tool
   vim.api.nvim_exec_autocmds("User", { pattern = "ArtistEnabled", modeline = false, data = { buf = bufnr } })
+  if state.options.show_palette_on_enable then
+    show_palette(state, "main")
+  end
 end
 
 ---Disable Artist mode in a buffer.
@@ -569,6 +941,7 @@ function M.disable(bufnr)
     return
   end
   M.cancel(bufnr)
+  close_palette(state)
   if vim.api.nvim_buf_is_valid(bufnr) then
     remove_mappings(bufnr, state)
     vim.b[bufnr].artist_enabled = false
@@ -627,6 +1000,7 @@ function M.set_tool(name, bufnr)
   state.legacy_freehand = name == "freehand"
   vim.b[bufnr].artist_tool = resolved
   update_toolbar(state)
+  refresh_palette(state)
   vim.api.nvim_exec_autocmds("User", {
     pattern = "ArtistToolChanged",
     modeline = false,
@@ -649,7 +1023,12 @@ local function cycle_tool(delta, bufnr)
   if not state then
     return
   end
-  local names, index = registry.names(), 1
+  local names, index = {}, 1
+  for _, item in ipairs(key_spec) do
+    if item.group == "tools" then
+      names[#names + 1] = item.arg
+    end
+  end
   for candidate, name in ipairs(names) do
     if name == state.tool then
       index = candidate
@@ -661,12 +1040,33 @@ end
 
 ---@param bufnr? integer
 function M.next_tool(bufnr)
-  cycle_tool(1, bufnr)
+  cycle_tool(vim.v.count1, bufnr)
 end
 
 ---@param bufnr? integer
 function M.previous_tool(bufnr)
-  cycle_tool(-1, bufnr)
+  cycle_tool(-vim.v.count1, bufnr)
+end
+
+---@param bufnr? integer
+function M.toggle_palette(bufnr)
+  local state = session_for(bufnr)
+  if not state then
+    return
+  end
+  if state.palette_kind then
+    close_palette(state)
+  else
+    show_palette(state, "main")
+  end
+end
+
+---@param bufnr? integer
+function M.show_options_palette(bufnr)
+  local state = session_for(bufnr)
+  if state then
+    show_palette(state, "options")
+  end
 end
 
 ---@param which 'first'|'second'
@@ -1047,6 +1447,66 @@ function M.pick_operation(bufnr)
   end)
 end
 
+---Install stable public mapping targets and the optional conservative default.
+function M._install_global_mappings()
+  local function target(name, callback, desc)
+    vim.keymap.set("n", "<Plug>(artist-" .. name .. ")", callback, { silent = true, desc = desc })
+  end
+  target("toggle", function()
+    M.toggle()
+  end, "Artist: toggle")
+  target("enable", function()
+    M.enable()
+  end, "Artist: enable")
+  target("disable", function()
+    M.disable()
+  end, "Artist: disable")
+  target("next-tool", function()
+    M.next_tool()
+  end, "Artist: next tool")
+  target("previous-tool", function()
+    M.previous_tool()
+  end, "Artist: previous tool")
+  target("shift-tool", function()
+    M.shift_tool()
+  end, "Artist: shifted tool")
+  target("palette", function()
+    M.toggle_palette()
+  end, "Artist: key palette")
+  target("options-palette", function()
+    M.show_options_palette()
+  end, "Artist: options palette")
+  for _, item in ipairs(key_spec) do
+    if item.method == "select_tool" then
+      target("tool-" .. item.arg:gsub("_", "-"), function()
+        M.set_tool(item.arg)
+      end, "Artist: " .. item.label)
+    end
+  end
+  for key, action in pairs(option_actions) do
+    target("option-" .. ({
+      e = "erase-character",
+      f = "fill-character",
+      l = "line-character",
+      r = "rubber-banding",
+      t = "trim-line-endings",
+      s = "borderless-shapes",
+    })[key], function()
+      M[action[1]](action[2])
+    end, "Artist: option")
+  end
+  local disabled = mapping_disabled_by_global() or config.mappings == false
+  local existing = vim.fn.maparg("gA", "n", false, true)
+  local ours = type(existing) == "table" and existing.rhs == "<Plug>(artist-toggle)"
+  if disabled then
+    if ours then
+      pcall(vim.keymap.del, "n", "gA")
+    end
+  elseif type(existing) ~= "table" or next(existing) == nil then
+    vim.keymap.set("n", "gA", "<Plug>(artist-toggle)", { remap = true, silent = true, desc = "Toggle Artist mode" })
+  end
+end
+
 ---Create Artist commands and lifecycle autocommands.
 function M._create_commands()
   if augroup then
@@ -1091,6 +1551,9 @@ function M._create_commands()
   vim.api.nvim_create_user_command("ArtistPicker", function()
     M.pick_operation()
   end, { desc = "Open the Artist operation picker" })
+  vim.api.nvim_create_user_command("ArtistPalette", function()
+    M.toggle_palette()
+  end, { desc = "Toggle the Artist key palette" })
   vim.api.nvim_create_user_command("ArtistArrow", function(command)
     M.toggle_arrow(command.args)
   end, {
@@ -1157,8 +1620,14 @@ function M._create_commands()
       if state and vim.api.nvim_win_get_buf(winid) == event.buf then
         configure_window(state, winid)
       end
+      for _, palette_state in pairs(sessions) do
+        if palette_state.palette_win and winid ~= palette_state.palette_win then
+          close_palette(palette_state)
+        end
+      end
     end,
   })
+  M._install_global_mappings()
 end
 
 M.tools = registry.names()

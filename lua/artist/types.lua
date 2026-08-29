@@ -56,6 +56,8 @@
 ---@field figlet_font? string
 ---@field rectangle_register? string|false
 ---@field mappings? boolean
+---@field keymaps? table<string, string|false>
+---@field show_palette_on_enable? boolean
 ---@field mouse_wheel? boolean
 ---@field winbar? boolean
 ---@field transparent_selection? boolean
@@ -116,5 +118,8 @@
 ---@field timer? Artist.Timer|uv.uv_timer_t
 ---@field saved_mappings? table<string, table>
 ---@field mapping_definitions? table[]
+---@field palette_win? integer
+---@field palette_buf? integer
+---@field palette_kind? 'main'|'options'
 
 return {}

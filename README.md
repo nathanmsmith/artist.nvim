@@ -59,7 +59,7 @@ The old names `freehand` and `erase` remain aliases for `pen_line` and
 `erase_rectangle`.
 
 Mouse operations use left drag. Shift-left drag invokes the shifted variant.
-Keyboard operations use these buffer-local mappings:
+Toggle Artist with `gA` (when it is unused), then use these buffer-local mappings:
 
 | Mapping | Action |
 | --- | --- |
@@ -67,10 +67,14 @@ Keyboard operations use these buffer-local mappings:
 | middle or right click | Open the operation picker |
 | `<CR>` | Set a point, apply a one-point operation, or add a poly-line point |
 | counted `<CR>` / `<C-CR>` | Finish a poly-line |
-| `h/j/k/l`, arrows, `C-b/C-n/C-p/C-f` | Move and update/draw the active operation |
+| `b/B`, `l/L`, `m/M`, `r/R`, `e/E`, `s/S`, `t/T` | Paired drawing tools (lowercase / shifted) |
+| `x/X`, `v/V`, `d/D`, `y/Y`, `p`, `f` | Erase, vaporize, cut, copy, paste, and fill tools |
+| `h/j/k`, arrows, `C-b/C-n/C-p/C-f` | Move and update/draw; use `<Right>` or `C-f` rightward |
+| `[a` / `]a`, `~` | Previous / next tool and shifted counterpart |
+| `?`, `o` | Toggle the key palette / open its options menu |
 | `<` / `>` | Toggle the first / second arrow endpoint |
-| `<C-c>` | Cancel without changing the buffer or undo history |
-| `C-c C-a` prefix | Upstream-compatible operation and setting shortcuts |
+| `<Esc>` / `<C-c>` | Cancel without changing the buffer or undo history |
+| `<C-c><C-c>` / `gA` | Exit Artist mode |
 
 Set `mouse_wheel = true` to cycle operations with the mouse wheel. Every
 displaced buffer mapping and the `virtualedit`, `wrap`, `winbar`,
@@ -116,6 +120,8 @@ require("artist").setup({
   rectangle_register = '"',     -- false disables register interop
 
   mappings = true,
+  keymaps = {},                 -- per-action mapping overrides, or false to disable
+  show_palette_on_enable = true,
   mouse_wheel = false,
   winbar = true,
   transparent_selection = true,
@@ -128,6 +134,16 @@ inject `rng(min, max)` per operation and a libuv-compatible `timer_factory`;
 applications can change the radius through the shifted radius operation.
 Rectangle copies are retained internally and also written blockwise to
 `rectangle_register`.
+
+Artist shows a short floating key palette on entry. Set
+`show_palette_on_enable = false` to suppress it; `?` and `:ArtistPalette`
+remain available. `mappings = false`, `g:no_plugin_maps`, or
+`g:artist_no_mappings` suppress default concrete mappings, but commands and
+the stable `<Plug>(artist-toggle)`, `<Plug>(artist-enable)`,
+`<Plug>(artist-disable)`, `<Plug>(artist-palette)`,
+`<Plug>(artist-next-tool)`, `<Plug>(artist-previous-tool)`,
+`<Plug>(artist-shift-tool)`, and `<Plug>(artist-tool-{operation})` targets
+remain available.
 
 ## Lua API
 
