@@ -167,6 +167,15 @@ make test
 make check
 ```
 
-`make check` runs StyLua, LuaLS diagnostics, and the test suite. Normal tests
-use checked-in fixtures and do not require Emacs or Figlet. See
+The first test run downloads the pinned `mini.test` dependency into the
+ignored `deps/` directory. Tests are grouped by module and behavior, with
+per-case setup and cleanup; stateful editor integration cases run in a fresh
+child Neovim. Run one file while iterating with:
+
+```sh
+make test-file FILE=tests/test_grid.lua
+```
+
+`make check` runs StyLua, LuaLS diagnostics, and the full test suite. Normal
+tests use checked-in fixtures and do not require Emacs or Figlet. See
 `tests/oracle/README.md` to regenerate differential fixtures with Emacs.

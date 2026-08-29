@@ -2,5 +2,5 @@
   "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
   "runtime.version": "LuaJIT",
   "workspace.checkThirdParty": "Disable",
-  "workspace.library": ["${env:VIMRUNTIME}/lua"]
+  "workspace.library": ["${env:VIMRUNTIME}/lua", "${workspaceFolder}/deps/mini.test/lua"]
 }

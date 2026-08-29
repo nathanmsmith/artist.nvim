@@ -157,8 +157,9 @@ local function mouse_position(bufnr)
   if value.winid == 0 or value.line < 1 or value.column < 1 or vim.api.nvim_win_get_buf(value.winid) ~= bufnr then
     return nil
   end
+  local coladd = (value --[[@as table]]).coladd or 0
   vim.api.nvim_set_current_win(value.winid)
-  pcall(vim.fn.cursor, { value.line, value.column, value.coladd or 0 })
+  pcall(vim.fn.cursor, { value.line, value.column, coladd })
   local row = value.line
   local line_count = vim.api.nvim_buf_line_count(bufnr)
   if row == line_count then
@@ -169,7 +170,7 @@ local function mouse_position(bufnr)
   end
   local line = vim.api.nvim_buf_get_lines(bufnr, value.line - 1, value.line, false)[1] or ""
   local prefix = line:sub(1, math.max(0, value.column - 1))
-  return { row = row, col = vim.fn.strdisplaywidth(prefix) + 1 + (value.coladd or 0) }
+  return { row = row, col = vim.fn.strdisplaywidth(prefix) + 1 + coladd }
 end
 
 ---@param state Artist.Session
