@@ -67,11 +67,13 @@ Setup is optional: >lua
       aspect_ratio = 1,
       pen_character = "*",
       mappings = true,
+      winbar = true,
     })
 <
 `tool` is the initially selected tool. `aspect_ratio` affects ellipse sampling.
 `pen_character` is used by freehand drawing. `mappings` controls installation
-of the default mappings.
+of the default mappings. `winbar` shows the Artist mode, active tool, and key
+hints at the top of each window displaying the buffer.
 
 ==============================================================================
 5. LUA API                                                      *artist-api*

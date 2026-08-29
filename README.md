@@ -53,6 +53,7 @@ require("artist").setup({
   aspect_ratio = 1,
   pen_character = "*",
   mappings = true,
+  winbar = true,
 })
 ```
 
@@ -63,6 +64,10 @@ Run `:Artist` to toggle Artist mode in the current buffer. Select a tool with
 the left mouse button to draw. Intersecting horizontal and vertical lines are
 joined with `+`; intersecting diagonals use `X`.
 
+While Artist mode is active, a buffer-local winbar shows the available tools,
+highlights the current tool, and displays the drawing shortcuts. Set
+`winbar = false` in `setup()` to hide it.
+
 Artist mode installs these normal-mode buffer mappings:
 
 | Mapping | Action |
@@ -72,8 +77,8 @@ Artist mode installs these normal-mode buffer mappings:
 | `<C-c>` | Cancel the current preview |
 
 The cursor can move past the end of a line or below the end of the buffer while
-Artist mode is active. Artist restores `virtualedit`, `wrap`, `mouse`, and any
-displaced buffer-local mappings when the mode is disabled.
+Artist mode is active. Artist restores `virtualedit`, `wrap`, `winbar`,
+`mouse`, and any displaced buffer-local mappings when the mode is disabled.
 
 Commands:
 

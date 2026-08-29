@@ -7,6 +7,7 @@ local defaults = {
   aspect_ratio = 1,
   pen_character = "*",
   mappings = true,
+  winbar = true,
 }
 
 local tools = {
@@ -36,6 +37,59 @@ local mapping_definitions = {
   { "<C-c>", "cancel" },
   { "<CR>", "keyboard_point" },
 }
+
+local toolbar_tools = { "line", "rectangle", "ellipse", "freehand", "erase" }
+
+local function toolbar_text(state)
+  local parts = { "%#ArtistMode# ARTIST %*" }
+  for _, tool in ipairs(toolbar_tools) do
+    if tool == state.tool then
+      parts[#parts + 1] = "%#ArtistTool# [" .. tool .. "] %*"
+    else
+      parts[#parts + 1] = "%#ArtistHint# " .. tool .. " %*"
+    end
+  end
+  parts[#parts + 1] = "%=%#ArtistHint# <CR> draw  <C-c> cancel %*"
+  return table.concat(parts)
+end
+
+local function configure_window(state, winid)
+  if state.active_windows[winid] then
+    return
+  end
+  state.previous.virtualedit[winid] = vim.wo[winid].virtualedit
+  state.previous.wrap[winid] = vim.wo[winid].wrap
+  state.previous.winbar[winid] = vim.wo[winid].winbar
+  state.active_windows[winid] = true
+  vim.wo[winid].virtualedit = "all"
+  vim.wo[winid].wrap = false
+  if state.options.winbar then
+    vim.wo[winid].winbar = toolbar_text(state)
+  end
+end
+
+local function restore_window(state, winid)
+  if not state.active_windows[winid] or not vim.api.nvim_win_is_valid(winid) then
+    return
+  end
+  vim.wo[winid].virtualedit = state.previous.virtualedit[winid]
+  vim.wo[winid].wrap = state.previous.wrap[winid]
+  if state.options.winbar then
+    vim.wo[winid].winbar = state.previous.winbar[winid]
+  end
+  state.active_windows[winid] = nil
+end
+
+local function update_toolbar(state)
+  if not state.options.winbar then
+    return
+  end
+  for winid in pairs(state.active_windows) do
+    if vim.api.nvim_win_is_valid(winid) then
+      vim.wo[winid].winbar = toolbar_text(state)
+    end
+  end
+end
 
 local function resolve_buffer(bufnr)
   if bufnr == nil or bufnr == 0 then
@@ -220,18 +274,17 @@ function M.enable(bufnr, options)
   local state = {
     tool = effective.tool,
     options = effective,
+    active_windows = {},
     previous = {
       virtualedit = {},
       wrap = {},
+      winbar = {},
     },
   }
   sessions[bufnr] = state
   for _, winid in ipairs(vim.api.nvim_list_wins()) do
     if vim.api.nvim_win_get_buf(winid) == bufnr then
-      state.previous.virtualedit[winid] = vim.wo[winid].virtualedit
-      state.previous.wrap[winid] = vim.wo[winid].wrap
-      vim.wo[winid].virtualedit = "all"
-      vim.wo[winid].wrap = false
+      configure_window(state, winid)
     end
   end
   original_mouse = original_mouse or vim.o.mouse
@@ -257,11 +310,8 @@ function M.disable(bufnr)
     vim.b[bufnr].artist_enabled = false
     vim.b[bufnr].artist_tool = nil
   end
-  for winid, value in pairs(state.previous.virtualedit) do
-    if vim.api.nvim_win_is_valid(winid) then
-      vim.wo[winid].virtualedit = value
-      vim.wo[winid].wrap = state.previous.wrap[winid]
-    end
+  for _, winid in ipairs(vim.tbl_keys(state.active_windows)) do
+    restore_window(state, winid)
   end
   -- 'mouse' is global. Restore it only if no other Artist session needs it.
   sessions[bufnr] = nil
@@ -302,6 +352,7 @@ function M.set_tool(tool, bufnr)
   end
   M.cancel(bufnr)
   state.tool = tool
+  update_toolbar(state)
   vim.b[bufnr].artist_tool = tool
   vim.api.nvim_exec_autocmds(
     "User",
@@ -459,6 +510,25 @@ function M._create_commands()
     callback = function(event)
       if sessions[event.buf] then
         M.disable(event.buf)
+      end
+    end,
+  })
+  vim.api.nvim_create_autocmd({ "BufWinEnter", "WinEnter" }, {
+    group = augroup,
+    callback = function(event)
+      local state = sessions[event.buf]
+      local winid = vim.api.nvim_get_current_win()
+      if state and vim.api.nvim_win_get_buf(winid) == event.buf then
+        configure_window(state, winid)
+      end
+    end,
+  })
+  vim.api.nvim_create_autocmd("BufWinLeave", {
+    group = augroup,
+    callback = function(event)
+      local state = sessions[event.buf]
+      if state then
+        restore_window(state, vim.api.nvim_get_current_win())
       end
     end,
   })

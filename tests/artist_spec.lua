@@ -44,18 +44,19 @@ equal({ "+---+", "|   |", "+---+" }, vim.api.nvim_buf_get_lines(0, 0, -1, false)
 reset({ "" })
 local original_getmousepos = vim.fn.getmousepos
 local mouse_winid = vim.api.nvim_get_current_win()
-local first_screen_row = vim.fn.screenpos(mouse_winid, 1, 1).row
 local fake_mouse = {
   line = 1,
   column = 1,
   coladd = 0,
-  screenrow = first_screen_row,
+  screenrow = 1,
   winid = mouse_winid,
 }
 vim.fn.getmousepos = function()
   return fake_mouse
 end
 artist.enable()
+local first_screen_row = vim.fn.screenpos(mouse_winid, 1, 1).row
+fake_mouse.screenrow = first_screen_row
 artist.mouse_down()
 fake_mouse = {
   line = 1,
@@ -79,8 +80,9 @@ artist.disable()
 equal({ "\\", " \\-", "   \\-" }, vim.api.nvim_buf_get_lines(0, 0, -1, false), "mouse drag uses virtual columns")
 
 reset({ "" })
-fake_mouse = { line = 1, column = 1, coladd = 0, screenrow = first_screen_row, winid = mouse_winid }
 artist.enable()
+first_screen_row = vim.fn.screenpos(mouse_winid, 1, 1).row
+fake_mouse = { line = 1, column = 1, coladd = 0, screenrow = first_screen_row, winid = mouse_winid }
 artist.mouse_down()
 fake_mouse = { line = 1, column = 1, coladd = 0, screenrow = first_screen_row + 2, winid = mouse_winid }
 artist.mouse_drag()
@@ -89,8 +91,9 @@ artist.disable()
 equal({ "|", "|", "|" }, vim.api.nvim_buf_get_lines(0, 0, -1, false), "mouse drag uses virtual rows")
 
 reset({ "" })
-fake_mouse = { line = 1, column = 1, coladd = 0, screenrow = first_screen_row, winid = mouse_winid }
 artist.enable()
+first_screen_row = vim.fn.screenpos(mouse_winid, 1, 1).row
+fake_mouse = { line = 1, column = 1, coladd = 0, screenrow = first_screen_row, winid = mouse_winid }
 artist.mouse_down()
 fake_mouse = { line = 1, column = 1, coladd = 4, screenrow = first_screen_row, winid = mouse_winid }
 artist.mouse_drag()
@@ -102,13 +105,25 @@ vim.fn.getmousepos = original_getmousepos
 local old_mouse = vim.o.mouse
 local old_virtualedit = vim.wo.virtualedit
 local old_wrap = vim.wo.wrap
+local old_winbar = vim.wo.winbar
 vim.keymap.set("n", "<CR>", ":let g:artist_original_mapping = 1<CR>", { buffer = true })
 local old_enter_mapping = vim.fn.maparg("<CR>", "n", false, true).rhs
 artist.enable()
 equal(true, artist.is_enabled(), "mode enables")
 equal("all", vim.wo.virtualedit, "mode enables virtual editing")
+equal(true, vim.wo.winbar:find("ARTIST", 1, true) ~= nil, "mode displays its winbar")
+equal(true, vim.wo.winbar:find("[line]", 1, true) ~= nil, "winbar highlights the active tool")
 artist.set_tool("ellipse")
 equal("ellipse", artist.get_tool(), "tool changes")
+equal(true, vim.wo.winbar:find("[ellipse]", 1, true) ~= nil, "winbar updates with the active tool")
+local artist_buffer = vim.api.nvim_get_current_buf()
+local other_buffer = vim.api.nvim_create_buf(false, true)
+vim.api.nvim_win_set_buf(0, other_buffer)
+equal(old_winbar, vim.wo.winbar, "winbar does not leak into another buffer")
+equal(old_virtualedit, vim.wo.virtualedit, "window options restore when leaving the Artist buffer")
+vim.api.nvim_win_set_buf(0, artist_buffer)
+equal(true, vim.wo.winbar:find("[ellipse]", 1, true) ~= nil, "winbar returns with the Artist buffer")
+vim.api.nvim_buf_delete(other_buffer, { force = true })
 vim.api.nvim_win_set_cursor(0, { 1, 0 })
 artist.keyboard_point()
 equal(1, #vim.api.nvim_buf_get_extmarks(0, -1, 0, -1, {}), "keyboard drawing creates a preview")
@@ -119,6 +134,7 @@ equal(false, artist.is_enabled(), "mode disables")
 equal(old_mouse, vim.o.mouse, "mouse option restores")
 equal(old_virtualedit, vim.wo.virtualedit, "virtualedit restores")
 equal(old_wrap, vim.wo.wrap, "wrap restores")
+equal(old_winbar, vim.wo.winbar, "winbar restores")
 equal(old_enter_mapping, vim.fn.maparg("<CR>", "n", false, true).rhs, "buffer mapping restores")
 vim.keymap.del("n", "<CR>", { buffer = true })
 
