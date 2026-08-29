@@ -63,8 +63,15 @@ local function mouse_position(bufnr)
     return nil
   end
   vim.api.nvim_set_current_win(value.winid)
-  pcall(vim.api.nvim_win_set_cursor, value.winid, { value.line, value.column - 1 })
-  return { row = value.line, col = value.column }
+  local coladd = value.coladd or 0
+  pcall(vim.fn.cursor, { value.line, value.column, coladd })
+
+  -- `column` stops at one byte past the end of the line. Horizontal mouse
+  -- movement in virtual space is reported separately in `coladd`.
+  local line = vim.api.nvim_buf_get_lines(bufnr, value.line - 1, value.line, false)[1] or ""
+  local prefix = line:sub(1, value.column - 1)
+  local character_column = vim.fn.strchars(prefix) + 1
+  return { row = value.line, col = character_column + coladd }
 end
 
 local function points_for(state, from, to)

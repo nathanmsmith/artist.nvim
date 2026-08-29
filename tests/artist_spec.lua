@@ -41,6 +41,21 @@ equal({ "+---+", "|   |", "+---+" }, vim.api.nvim_buf_get_lines(0, 0, -1, false)
 artist.draw("erase", { 2, 2 }, { 2, 4 })
 equal({ "+---+", "|   |", "+---+" }, vim.api.nvim_buf_get_lines(0, 0, -1, false), "erasing spaces preserves dimensions")
 
+reset({ "", "", "" })
+local original_getmousepos = vim.fn.getmousepos
+local fake_mouse = { line = 1, column = 1, coladd = 0, winid = vim.api.nvim_get_current_win() }
+vim.fn.getmousepos = function()
+  return fake_mouse
+end
+artist.enable()
+artist.mouse_down()
+fake_mouse = { line = 3, column = 1, coladd = 4, winid = vim.api.nvim_get_current_win() }
+artist.mouse_drag()
+artist.mouse_up()
+artist.disable()
+vim.fn.getmousepos = original_getmousepos
+equal({ "\\", " \\-", "   \\-" }, vim.api.nvim_buf_get_lines(0, 0, -1, false), "mouse drag uses virtual columns")
+
 local old_mouse = vim.o.mouse
 local old_virtualedit = vim.wo.virtualedit
 vim.keymap.set("n", "<CR>", ":let g:artist_original_mapping = 1<CR>", { buffer = true })
