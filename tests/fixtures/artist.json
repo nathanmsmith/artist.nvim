@@ -1,0 +1,30 @@
+[
+  {
+    "name": "horizontal",
+    "operation": "line",
+    "from": [1, 1],
+    "to": [1, 5],
+    "lines": ["-----"]
+  },
+  {
+    "name": "vertical",
+    "operation": "line",
+    "from": [1, 1],
+    "to": [3, 1],
+    "lines": ["|", "|", "|"]
+  },
+  {
+    "name": "shallow-octant",
+    "operation": "line",
+    "from": [1, 1],
+    "to": [3, 8],
+    "lines": ["--", "  \\---", "      \\-"]
+  },
+  {
+    "name": "rectangle",
+    "operation": "rectangle",
+    "from": [1, 1],
+    "to": [3, 5],
+    "lines": ["+---+", "|   |", "+---+"]
+  }
+]

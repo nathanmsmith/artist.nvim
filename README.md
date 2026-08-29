@@ -1,10 +1,11 @@
 # artist.nvim
 
-[Artist mode](https://github.com/emacs-mirror/emacs/blob/master/lisp/textmodes/artist.el), for Neovim.
+[GNU Emacs Artist mode](https://github.com/emacs-mirror/emacs/blob/f4f249a2249a7047ba41a659b8fcdcd7e1caf4e0/lisp/textmodes/artist.el), faithfully ported to Neovim.
 
-Draw ASCII diagrams directly in any buffer. Artist mode supports mouse and
-keyboard drawing, keeps its mappings buffer-local, previews shapes before they
-are committed, and leaves every completed shape as a single undoable edit.
+Artist draws ASCII diagrams directly in a buffer. It uses display-cell
+coordinates, so tabs, combining characters, double-width characters, virtual
+columns, and rows below the end of the buffer behave consistently. Previews
+are extmarks; a completed operation is committed as one undo entry.
 
 ```text
     +------------------+
@@ -14,123 +15,156 @@ are committed, and leaves every completed shape as a single undoable edit.
     +----------+-------+
 ```
 
+The compatibility target is Artist from Emacs commit
+`f4f249a2249a7047ba41a659b8fcdcd7e1caf4e0`; the corresponding source is
+checked in as `artist.el`. artist.nvim supports Neovim 0.10 and newer and is
+licensed under GPLv3.
+
 ## Installation
 
-Add the plugin with Neovim's built-in package manager in `init.lua`:
-
 ```lua
-vim.pack.add({
-  "https://github.com/nathom/artist.nvim",
-})
+vim.pack.add({ "https://github.com/nathom/artist.nvim" })
 ```
 
-### Local checkout
+For another package manager, install the repository normally and call
+`require("artist").setup()` if you want to change defaults.
 
-The built-in manager can also install from a local Git repository:
+## Operations
 
-```lua
-vim.pack.add({
-  {
-    src = vim.fn.expand("~/Developer/artist.nvim"),
-    name = "artist.nvim",
-  },
-})
-```
+Run `:Artist` to toggle the mode and `:ArtistTool {operation}` to select an
+operation. `:ArtistPicker` opens `vim.ui.select`; `:ArtistShift` selects the
+active operation's shifted counterpart. `:ArtistSet {setting} {value}` changes
+a setting for the current buffer-local session.
 
-Replace the path with the location of your checkout. `vim.pack` clones the
-repository into Neovim's managed package directory, so commit local changes
-before updating the installed copy. After making a new commit, run
-`:lua vim.pack.update({ "artist.nvim" })`, confirm the update with `:write`,
-and restart Neovim.
+| Drawing | Shifted variant |
+| --- | --- |
+| `pen` | `pen_line` |
+| `line` | `straight_line` |
+| `rectangle` | `square` |
+| `poly_line` | `straight_poly_line` |
+| `ellipse` | `circle` |
+| `text_see_through` | `text_overwrite` |
+| `spray` | `spray_radius` |
+| `erase_character` | `erase_rectangle` |
+| `vaporize_line` | `vaporize_lines` |
+| `cut_rectangle` | `cut_square` |
+| `copy_rectangle` | `copy_square` |
+| `paste` | `paste` |
+| `flood_fill` | `flood_fill` |
 
-### Configuration
+The old names `freehand` and `erase` remain aliases for `pen_line` and
+`erase_rectangle`.
 
-Configuration is optional; the defaults are:
+Mouse operations use left drag. Shift-left drag invokes the shifted variant.
+Keyboard operations use these buffer-local mappings:
+
+| Mapping | Action |
+| --- | --- |
+| left drag / shift-left drag | Preview the normal / shifted operation |
+| middle or right click | Open the operation picker |
+| `<CR>` | Set a point, apply a one-point operation, or add a poly-line point |
+| counted `<CR>` / `<C-CR>` | Finish a poly-line |
+| `h/j/k/l`, arrows, `C-b/C-n/C-p/C-f` | Move and update/draw the active operation |
+| `<` / `>` | Toggle the first / second arrow endpoint |
+| `<C-c>` | Cancel without changing the buffer or undo history |
+| `C-c C-a` prefix | Upstream-compatible operation and setting shortcuts |
+
+Set `mouse_wheel = true` to cycle operations with the mouse wheel. Every
+displaced buffer mapping and the `virtualedit`, `wrap`, `winbar`,
+`winhighlight`, and global `mouse` options are restored on exit.
+
+## Configuration
 
 ```lua
 require("artist").setup({
-  tool = "line",
+  tool = "pen_line",
   aspect_ratio = 1,
-  pen_character = "*",
+  rubber_banding = true,
+  first_character = "1",         -- endpoint markers without rubber banding
+  second_character = "2",
+
+  line_character = nil,          -- nil selects - | / \\ by direction
+  fill_character = nil,
+  default_fill_character = ".",
+  erase_character = " ",
+  trim_line_endings = true,
+  borderless_shapes = false,
+
+  first_arrow = false,
+  second_arrow = false,
+  arrow_characters = { ">", false, "v", "L", "<", false, "^", false },
+  ellipse_left_character = "(",
+  ellipse_right_character = ")",
+
+  flood_fill_right_boundary = "window_width", -- or a display column
+  fill_column = 80,               -- used by the "fill_column" boundary
+  flood_fill_incremental = false,
+  vaporize_fuzziness = 1,
+
+  spray_interval = 0.2,
+  spray_radius = 4,
+  spray_characters = { " ", ".", "-", "+", "m", "%", "*", "#" },
+  spray_initial_character = ".",
+  timer_factory = nil,            -- injectable libuv-compatible timer
+
+  text_renderer = nil,           -- function(text, options) -> string[]
+  figlet_executable = "figlet",
+  figlet_font = "standard",
+  rectangle_register = '"',     -- false disables register interop
+
   mappings = true,
+  mouse_wheel = false,
   winbar = true,
   transparent_selection = true,
 })
 ```
 
-## Usage
-
-Run `:Artist` to toggle Artist mode in the current buffer. Select a tool with
-`:ArtistTool line`, `rectangle`, `ellipse`, `freehand`, or `erase`, then drag
-the left mouse button to draw. Intersecting horizontal and vertical lines are
-joined with `+`; intersecting diagonals use `X`.
-
-While Artist mode is active, a buffer-local winbar shows the available tools,
-highlights the current tool, and displays the drawing shortcuts. Set
-`winbar = false` in `setup()` to hide it.
-
-The Visual selection background is transparent in Artist windows so mouse
-selection does not cover the drawing. Artist applies this with a window-local
-highlight remap and restores any existing `winhighlight` value on exit. Set
-`transparent_selection = false` to retain your normal Visual highlight.
-
-Artist mode installs these normal-mode buffer mappings:
-
-| Mapping | Action |
-| --- | --- |
-| left mouse drag | Preview and draw the selected tool |
-| `<CR>` | Place the first corner/end point, then draw to the cursor |
-| `<C-c>` | Cancel the current preview |
-
-The cursor can move past the end of a line or below the end of the buffer while
-Artist mode is active. Artist restores `virtualedit`, `wrap`, `winbar`,
-`winhighlight`, `mouse`, and any displaced buffer-local mappings when the mode
-is disabled.
-
-Commands:
-
-| Command | Action |
-| --- | --- |
-| `:Artist` / `:ArtistToggle` | Toggle Artist mode |
-| `:ArtistEnable` | Enable Artist mode |
-| `:ArtistDisable` | Disable Artist mode |
-| `:ArtistTool {tool}` | Change the active tool |
-| `:Artist {tool}` | Change the tool using the short form |
-
-For keyboard-only drawing, move the cursor to one endpoint and press `<CR>`,
-move to the other endpoint, and press `<CR>` again. The freehand tool places
-the configured pen character on each `<CR>` press. The erase tool removes the
-entire rectangle between the two selected points.
+`text_renderer` is the portable extension point. With no renderer, Artist
+uses Figlet when installed and falls back to unrendered text. Spray tests can
+inject `rng(min, max)` per operation and a libuv-compatible `timer_factory`;
+applications can change the radius through the shifted radius operation.
+Rectangle copies are retained internally and also written blockwise to
+`rectangle_register`.
 
 ## Lua API
 
 ```lua
 local artist = require("artist")
 
-artist.enable(0)                  -- 0 or nil means the current buffer
+artist.enable(0)
 artist.set_tool("rectangle")
-artist.get_tool()                 -- "rectangle"
-artist.is_enabled()               -- true
-artist.cancel()                   -- discard an active preview
+artist.shift_tool()
+artist.toggle_arrow("first")
+artist.finish()
+artist.cancel()
 artist.disable()
 
--- Drawing without enabling the interactive mode; coordinates are one-based.
+-- Direct, atomic operations. Coordinates are one-based display cells.
 artist.draw("line", { row = 2, col = 3 }, { row = 2, col = 12 })
-artist.draw("ellipse", { 4, 3 }, { 10, 20 }, { aspect_ratio = 1 })
+artist.draw("flood_fill", { 4, 6 }, nil, { fill_character = "." })
+artist.draw("text_see_through", { 8, 1 }, nil, { text = "hello" })
 ```
 
-Completed shapes update the buffer through the Neovim API, so normal undo and
-redo work as expected. Artist mode also emits the `User` events
-`ArtistEnabled`, `ArtistDisabled`, and `ArtistToolChanged`.
+The public `artist.tools` list contains all 24 operations. Mode changes emit
+the `ArtistEnabled`, `ArtistDisabled`, and `ArtistToolChanged` `User` events.
+
+## Neovim equivalents and divergences
+
+- Extmark overlays replace Emacs rubber-band buffer edits, so cancellation is
+  history-free.
+- A configurable blockwise Neovim register replaces `rect.el` integration.
+- A winbar and `vim.ui.select` picker replace the mode-line, toolbar, and popup
+  menu.
+- Picture mode, X pointer shapes, and Emacs input queue display updates have
+  no direct Neovim equivalent. `flood_fill_incremental` is accepted for
+  compatibility but commits atomically after the patch is complete.
 
 ## Development
 
-The test suite has no third-party dependencies. Run it with:
-
 ```sh
 make test
+make check
 ```
 
-This starts Neovim with no user configuration or ShaDa file and executes
-`tests/artist_spec.lua`. `make check` additionally checks formatting with
-[StyLua](https://github.com/JohnnyMorganz/StyLua).
+Normal tests use checked-in fixtures and do not require Emacs or Figlet. See
+`tests/oracle/README.md` to regenerate differential fixtures with Emacs.

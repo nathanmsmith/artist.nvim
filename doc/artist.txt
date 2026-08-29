@@ -1,115 +1,170 @@
-*artist.txt*                       Draw ASCII diagrams in Neovim
+*artist.txt*                GNU Emacs Artist mode for Neovim
 
 ==============================================================================
 CONTENTS                                                        *artist-contents*
 
 1. Introduction                                      |artist-introduction|
-2. Commands                                              |artist-commands|
-3. Mappings                                              |artist-mappings|
-4. Configuration                                    |artist-configuration|
-5. Lua API                                                  |artist-api|
+2. Operations                                            |artist-operations|
+3. Commands                                              |artist-commands|
+4. Mappings                                              |artist-mappings|
+5. Configuration                                    |artist-configuration|
+6. Lua API                                                  |artist-api|
 
 ==============================================================================
 1. INTRODUCTION                                          *artist-introduction*
 
-artist.nvim brings an Artist-style drawing mode to any Neovim buffer. It can
-draw lines, rectangles, ellipses, freehand strokes, and erased regions. A
-mouse drag is shown as a non-destructive preview and committed on release.
+artist.nvim ports Artist from Emacs commit
+f4f249a2249a7047ba41a659b8fcdcd7e1caf4e0. It supports Neovim 0.10+.
+Coordinates are one-based display cells. Tabs, combining and wide characters,
+virtual columns, and virtual rows are handled by a display-cell grid.
 
-Coordinates in the Lua API are one-based, just like line numbers displayed by
-Neovim. Shapes may extend the buffer down or extend a line to the right.
+Previews use extmarks and do not edit the buffer. Completion commits one patch
+as one undo step; cancellation leaves both the buffer and undo history intact.
 
 ==============================================================================
-2. COMMANDS                                                  *artist-commands*
+2. OPERATIONS                                              *artist-operations*
+
+The 24 canonical operation names are:
+
+pen                 pen_line               line
+straight_line       rectangle              square
+poly_line           straight_poly_line     ellipse
+circle              text_see_through       text_overwrite
+spray               spray_radius           erase_character
+erase_rectangle     vaporize_line          vaporize_lines
+cut_rectangle       cut_square             copy_rectangle
+copy_square         paste                  flood_fill
+
+Shift pairs are adjacent in the list above. `freehand`, `erase`, and common
+hyphenated spellings are accepted as compatibility aliases.
+
+==============================================================================
+3. COMMANDS                                                  *artist-commands*
 
                                                         *:Artist*
-:Artist [enable|disable|toggle|{tool}]
-    With no argument, toggle Artist mode in the current buffer. A tool name
-    changes the current tool.
-
-                                                        *:ArtistEnable*
-:ArtistEnable
-    Enable Artist mode in the current buffer.
-
-                                                        *:ArtistDisable*
-:ArtistDisable
-    Disable Artist mode and cancel an active preview.
-
-                                                        *:ArtistToggle*
-:ArtistToggle
-    Toggle Artist mode in the current buffer.
+:Artist [enable|disable|toggle|{operation}]
+    Toggle the mode or select an operation.
 
                                                         *:ArtistTool*
-:ArtistTool {tool}
-    Select line, rectangle, ellipse, freehand, or erase.
+:ArtistTool {operation}
+    Select any canonical operation.
+
+                                                        *:ArtistEnable*
+                                                        *:ArtistDisable*
+                                                        *:ArtistToggle*
+:ArtistEnable | :ArtistDisable | :ArtistToggle
+    Manage Artist mode in the current buffer.
+
+                                                        *:ArtistShift*
+:ArtistShift
+    Select the shifted variant of the current operation.
+
+                                                        *:ArtistPicker*
+:ArtistPicker
+    Select an operation through `vim.ui.select()`.
+
+                                                        *:ArtistArrow*
+:ArtistArrow {first|second}
+    Toggle an arrow on that endpoint for line operations.
+
+                                                        *:ArtistSet*
+:ArtistSet {setting} {value}
+    Change a setting in the current buffer-local session. Character settings
+    accept `none` or `default` to reset them.
 
 ==============================================================================
-3. MAPPINGS                                                  *artist-mappings*
+4. MAPPINGS                                                  *artist-mappings*
 
-The mappings below exist only while Artist mode is enabled:
+    <LeftMouse>/<LeftDrag>/<LeftRelease>       mouse operation
+    <S-LeftMouse>/<S-LeftDrag>/<S-LeftRelease> shifted operation
+    <MiddleMouse>, <RightMouse>                 operation picker
+    <CR>                                       set/apply a point
+    counted <CR>, <C-CR>                       finish a poly-line
+    h j k l, arrow keys                        move and draw/preview
+    C-b C-n C-p C-f                           Emacs movement equivalents
+    < / >                                      toggle endpoint arrows
+    C-c C-a {key}                              upstream operation/settings map
+    <C-c>                                      cancel
 
-    <LeftMouse>       Start a shape
-    <LeftDrag>        Update its preview
-    <LeftRelease>     Commit it
-    <CR>              Place or finish a keyboard endpoint
-    <C-c>             Cancel an unfinished shape
-
-Mappings can be disabled with `mappings = false`. Existing buffer-local
-mappings are restored when Artist mode ends.
+Mappings are buffer-local and displaced mappings are restored. Set
+`mappings = false` to install none, or `mouse_wheel = true` to map the wheel
+to operation cycling.
 
 ==============================================================================
-4. CONFIGURATION                                        *artist-configuration*
+5. CONFIGURATION                                        *artist-configuration*
 
 Setup is optional: >lua
 
-    require("artist").setup({
-      tool = "line",
-      aspect_ratio = 1,
-      pen_character = "*",
-      mappings = true,
-      winbar = true,
-      transparent_selection = true,
-    })
+  require("artist").setup({
+    tool = "pen_line",
+    aspect_ratio = 1,
+    rubber_banding = true,
+    first_character = "1",
+    second_character = "2",
+    line_character = nil,
+    fill_character = nil,
+    default_fill_character = ".",
+    erase_character = " ",
+    trim_line_endings = true,
+    borderless_shapes = false,
+    first_arrow = false,
+    second_arrow = false,
+    ellipse_left_character = "(",
+    ellipse_right_character = ")",
+    flood_fill_right_boundary = "window_width",
+    fill_column = 80,
+    flood_fill_incremental = false,
+    vaporize_fuzziness = 1,
+    spray_interval = 0.2,
+    spray_radius = 4,
+    spray_characters = { " ", ".", "-", "+", "m", "%", "*", "#" },
+    spray_initial_character = ".",
+    timer_factory = nil,
+    text_renderer = nil,
+    figlet_executable = "figlet",
+    figlet_font = "standard",
+    rectangle_register = '"',
+    mappings = true,
+    mouse_wheel = false,
+    winbar = true,
+    transparent_selection = true,
+  })
 <
-`tool` is the initially selected tool. `aspect_ratio` affects ellipse sampling.
-`pen_character` is used by freehand drawing. `mappings` controls installation
-of the default mappings. `winbar` shows the Artist mode, active tool, and key
-hints at the top of each window displaying the buffer. `transparent_selection`
-temporarily removes the Visual selection background in Artist windows.
+`text_renderer` receives `(text, options)` and returns a string or list of
+lines. Figlet is optional. `rectangle_register = false` disables blockwise
+register interoperation. Flood filling always computes and commits one atomic
+patch; the incremental-display option exists for configuration compatibility.
 
 ==============================================================================
-5. LUA API                                                      *artist-api*
+6. LUA API                                                      *artist-api*
 
 enable([{bufnr}], [{options}])                          *artist.enable()*
-    Enable Artist mode. Zero and nil select the current buffer.
-
 disable([{bufnr}])                                     *artist.disable()*
 toggle([{bufnr}], [{options}])                          *artist.toggle()*
 is_enabled([{bufnr}])                               *artist.is_enabled()*
-    Manage or query the buffer-local mode.
+    Manage or query a buffer-local session.
 
-set_tool({tool}, [{bufnr}])                            *artist.set_tool()*
+set_tool({operation}, [{bufnr}])                       *artist.set_tool()*
 get_tool([{bufnr}])                                    *artist.get_tool()*
-    Change or query the active tool.
+shift_tool([{bufnr}])                                *artist.shift_tool()*
+toggle_arrow({first|second}, [{bufnr}])             *artist.toggle_arrow()*
+    Select operations and arrow state.
 
-cancel([{bufnr}])                                        *artist.cancel()*
-    Cancel the active mouse drag or keyboard endpoint.
+finish([{bufnr}])                                      *artist.finish()*
+cancel([{bufnr}])                                      *artist.cancel()*
+    Finish a poly operation or discard pending state.
 
-draw({tool}, {from}, {to}, [{options}])                   *artist.draw()*
-    Draw directly without enabling the mode. `from` and `to` are one-based
-    `{ row, col }` tables (array-style `{ row, col }` is also accepted).
-    Options may contain `bufnr`, `aspect_ratio`, `pen_character`, or
-    `overwrite`.
+draw({operation}, {from}, [{to}], [{options}])            *artist.draw()*
+    Execute an atomic operation without enabling the interactive mode.
+    Positions are `{ row, col }` or `{ row, col }` arrays in display cells.
 
-User events: >lua
+ArtistEnabled, ArtistDisabled, and ArtistToolChanged are `User` events.
 
-    vim.api.nvim_create_autocmd("User", {
-      pattern = "ArtistToolChanged",
-      callback = function(event)
-        print(event.data.tool)
-      end,
-    })
-<
-The events are ArtistEnabled, ArtistDisabled, and ArtistToolChanged.
+==============================================================================
+NEOVIM DIVERGENCES                                      *artist-divergences*
+
+Extmarks replace buffer-mutating rubber banding; a blockwise register replaces
+rect.el; the winbar and vim.ui.select replace Emacs UI integrations. Picture
+mode and X pointer shapes are not applicable to Neovim.
 
 vim:tw=78:ts=8:noet:ft=help:norl:

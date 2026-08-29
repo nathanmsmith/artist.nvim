@@ -1,4 +1,4 @@
-.PHONY: test format check
+.PHONY: test format check oracle
 
 NVIM ?= nvim
 STYLUA ?= stylua
@@ -13,3 +13,6 @@ format:
 check:
 	$(STYLUA) --check $(LUA_DIRS)
 	$(MAKE) test
+
+oracle:
+	emacs --batch --quick -l tests/oracle/generate.el > tests/fixtures/artist.json
