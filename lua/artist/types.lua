@@ -99,6 +99,7 @@
 ---@field winbar table<integer, string>
 ---@field winhighlight table<integer, string>
 
+---Per-buffer state for an enabled Artist mode session.
 ---@class Artist.Session
 ---@field bufnr integer
 ---@field tool string

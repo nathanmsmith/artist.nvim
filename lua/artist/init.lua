@@ -256,7 +256,14 @@ local key_spec = {
     shifted = "copy_rectangle",
     group = "tools",
   },
-  { action = "paste", lhs = "p", method = "select_tool", arg = "paste", label = "Paste", group = "tools" },
+  {
+    action = "paste",
+    lhs = "p",
+    method = "select_tool",
+    arg = "paste",
+    label = "Paste",
+    group = "tools",
+  },
   {
     action = "flood_fill",
     lhs = "f",
@@ -265,13 +272,55 @@ local key_spec = {
     label = "Flood Fill",
     group = "tools",
   },
-  { action = "previous_tool", lhs = "[a", method = "previous_tool", label = "Previous tool", group = "controls" },
-  { action = "next_tool", lhs = "]a", method = "next_tool", label = "Next tool", group = "controls" },
-  { action = "shift_tool", lhs = "~", method = "shift_tool", label = "Shift tool", group = "controls" },
-  { action = "palette", lhs = "?", method = "toggle_palette", label = "Key palette", group = "controls" },
-  { action = "options_palette", lhs = "o", method = "show_options_palette", label = "Options", group = "controls" },
-  { action = "keyboard_point", lhs = "<CR>", method = "keyboard_point", label = "Set point", group = "controls" },
-  { action = "finish", lhs = "<C-CR>", method = "finish", label = "Finish", group = "controls" },
+  {
+    action = "previous_tool",
+    lhs = "[a",
+    method = "previous_tool",
+    label = "Previous tool",
+    group = "controls",
+  },
+  {
+    action = "next_tool",
+    lhs = "]a",
+    method = "next_tool",
+    label = "Next tool",
+    group = "controls",
+  },
+  {
+    action = "shift_tool",
+    lhs = "~",
+    method = "shift_tool",
+    label = "Shift tool",
+    group = "controls",
+  },
+  {
+    action = "palette",
+    lhs = "?",
+    method = "toggle_palette",
+    label = "Key palette",
+    group = "controls",
+  },
+  {
+    action = "options_palette",
+    lhs = "o",
+    method = "show_options_palette",
+    label = "Options",
+    group = "controls",
+  },
+  {
+    action = "keyboard_point",
+    lhs = "<CR>",
+    method = "keyboard_point",
+    label = "Set point",
+    group = "controls",
+  },
+  {
+    action = "finish",
+    lhs = "<C-CR>",
+    method = "finish",
+    label = "Finish",
+    group = "controls",
+  },
   {
     action = "toggle_first_arrow",
     lhs = "<",
@@ -286,9 +335,27 @@ local key_spec = {
     label = "Second arrow",
     group = "controls",
   },
-  { action = "cancel", lhs = "<Esc>", method = "cancel", label = "Cancel", group = "controls" },
-  { action = "cancel_ctrl", lhs = "<C-c>", method = "cancel", label = "Cancel", group = "controls" },
-  { action = "disable", lhs = "<C-c><C-c>", method = "disable", label = "Exit Artist", group = "controls" },
+  {
+    action = "cancel",
+    lhs = "<Esc>",
+    method = "cancel",
+    label = "Cancel",
+    group = "controls",
+  },
+  {
+    action = "cancel_ctrl",
+    lhs = "<C-c>",
+    method = "cancel",
+    label = "Cancel",
+    group = "controls",
+  },
+  {
+    action = "disable",
+    lhs = "<C-c><C-c>",
+    method = "disable",
+    label = "Exit Artist",
+    group = "controls",
+  },
 }
 
 local mouse_mapping_definitions = {
@@ -318,6 +385,7 @@ local movement_mappings = {
   { "<C-f>", "l" },
 }
 
+---Resolve a buffer number, defaulting nil or 0 to the current buffer.
 ---@param bufnr? integer
 ---@return integer
 local function resolve_buffer(bufnr)
@@ -327,6 +395,7 @@ local function resolve_buffer(bufnr)
   return bufnr
 end
 
+---Returns the Artist.Session for a given buffer.
 ---@param bufnr? integer
 ---@return Artist.Session? state
 ---@return integer bufnr
@@ -335,6 +404,7 @@ local function session_for(bufnr)
   return sessions[bufnr], bufnr
 end
 
+---Retrieve an operation from its name.
 ---@param name string
 ---@return Artist.OperationDefinition
 local function operation_definition(name)
