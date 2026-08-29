@@ -1,243 +1,234 @@
-# Faithful Artist Mode Port Plan
+# Vim-Native Keybindings and Key Palette Plan
 
-## Verdict
+## Goal
 
-This is not a matter of adding flood-fill and a few tools. The current plugin
-is a solid Neovim drawing prototype, but a faithful Artist port requires
-replacing its tool-centric core with Artist's operation registry, drawing
-semantics, and interaction state machine.
+Replace Artist's Emacs-derived keyboard shortcuts with a compact, discoverable
+Vim-native interface. Entering the mode should be memorable, changing tools
+should take one key, related tools should form lowercase/uppercase pairs, and
+the complete interface should be visible without consulting the help file.
 
-Upstream exposes roughly 24 distinct operations, shifted variants, arrows,
-filling, rectangle editing, text rendering, spray, vaporization, and full
-keyboard control. The current plugin surfaces five tools, several with
-materially different geometry or behavior. See the pinned
-[upstream operation table](https://github.com/emacs-mirror/emacs/blob/f4f249a2249a7047ba41a659b8fcdcd7e1caf4e0/lisp/textmodes/artist.el#L634-L875).
+The new interface remains modal and buffer-local. Artist may deliberately
+displace Normal-mode keys while it is enabled, but every displaced mapping
+must be restored exactly when the mode is disabled.
 
-## Where the Current Implementation Diverges
+## Entering and Leaving Artist Mode
 
-| Area | Artist behavior | Current state |
-| --- | --- | --- |
-| Lines | Arbitrary and snapped 8-direction lines; poly-lines; arrow endpoints | One Bresenham line |
-| Pen | Single-character pen and connected pen-line | Freehand approximates pen-line only |
-| Shapes | Rectangle/square and ellipse/circle; optional fill and borders | Rectangle and ellipse outlines |
-| Editing | Erase char/rectangle, vaporize one/connected lines, cut/copy/paste rectangles and squares | Rectangle eraser only |
-| Effects | Flood-fill, spray and radius selection | Missing |
-| Text | Figlet/custom renderer, see-through and overwrite modes | Missing |
-| Input | Mouse shifted variants, popup selection, wheel cycling, full keyboard drawing | Left drag and two-`RET` endpoints |
-| Settings | Line/fill/erase characters, trimming, borders, arrows, fill bounds, spray settings, fuzziness | Pen character and nominal aspect ratio |
+Use `gA` as the default global toggle for Artist mode. It has no built-in
+meaning in clean Neovim and provides a short mnemonic without occupying the
+user's leader namespace.
 
-There are also compatibility bugs beneath the missing features:
+- `gA` enables Artist in the current buffer when disabled and disables it when
+  enabled.
+- `<C-c><C-c>` remains an in-mode exit mapping.
+- `<Plug>(artist-toggle)` is the stable public target behind `gA`.
+- Also expose `<Plug>(artist-enable)` and `<Plug>(artist-disable)` for users who
+  prefer explicit mappings.
+- Install `gA` only when that key is not already mapped. Never replace an
+  existing user mapping.
+- Do not install the concrete default when `g:no_plugin_maps`,
+  `g:artist_no_mappings`, or `mappings = false` disables default mappings.
+- Commands remain available regardless of mapping configuration.
 
-- [`aspect_ratio`](lua/artist/canvas.lua#L182) only changes ellipse sample
-  count; it does not change the geometry. Artist uses it to make squares and
-  circles visually correct.
-- Current ellipses interpret two points as bounding-box corners. Artist treats
-  the first point as the center and expands through the second point using its
-  midpoint ellipse algorithm.
-- [`merge_character()`](lua/artist/canvas.lua#L60) merges more combinations
-  than Artist. Artist deliberately only creates `+` for orthogonal crossings
-  and `X` for opposing diagonals; other combinations overwrite. See
-  [Artist's intersection rules](https://github.com/emacs-mirror/emacs/blob/f4f249a2249a7047ba41a659b8fcdcd7e1caf4e0/lisp/textmodes/artist.el#L2092-L2132).
-- Coordinates are character indexes, not display-cell columns. Tabs,
-  combining characters, and double-width Unicode will break mouse positioning
-  or previews.
-- Keyboard drawing does not update as the cursor moves because only `RET` and
-  cancel are mapped. Artist maps directional movement into the active drawing
-  operation and supports terminating poly-lines with a prefix argument. Its
-  full keymap is visible
-  [here](https://github.com/emacs-mirror/emacs/blob/f4f249a2249a7047ba41a659b8fcdcd7e1caf4e0/lisp/textmodes/artist.el#L477-L527).
-- Artist trims trailing whitespace by default; the current tests explicitly
-  require erased spaces to remain.
+## Tool Keymap
 
-## Architecture
+Tool mappings are buffer-local single characters. A lowercase key selects the
+base tool and its uppercase form selects the shifted variant. The order below
+is both the display order in the palette and the traversal order for tool
+cycling.
 
-Retain the good Neovim shell: buffer-local sessions, extmark previews, option
-restoration, atomic commits, commands, events, and the winbar.
+| Key | Tool | Key | Shifted tool |
+| --- | --- | --- | --- |
+| `b` | Pen | `B` | Pen Line |
+| `l` | Line | `L` | Straight Line |
+| `m` | Poly-line | `M` | Straight Poly-line |
+| `r` | Rectangle | `R` | Square |
+| `e` | Ellipse | `E` | Circle |
+| `s` | Spray | `S` | Spray Radius |
+| `t` | Text (see-through) | `T` | Text (overwrite) |
+| `x` | Erase Character | `X` | Erase Rectangle |
+| `v` | Vaporize Line | `V` | Vaporize Connected Lines |
+| `d` | Cut Rectangle | `D` | Cut Square |
+| `y` | Copy Rectangle | `Y` | Copy Square |
+| `p` | Paste | | |
+| `f` | Flood Fill | | |
 
-Replace the drawing core with four layers.
+`b` is the mnemonic for brush, leaving `p` consistent with Vim's paste
+vocabulary. Likewise, `d`, `y`, `p`, and `x` intentionally echo Vim's delete,
+yank, paste, and character-delete vocabulary.
 
-### 1. Display-cell grid
+Lowercase `l` is deliberately reassigned from rightward movement to Line.
+`h`, `j`, and `k` continue to move left, down, and up. Arrow keys remain
+available in all four directions, so `<Right>` is the unambiguous rightward
+movement key. Existing `C-b/C-n/C-p/C-f` movement aliases remain available.
 
-Read and write virtual canvas cells consistently, including tabs, Unicode
-width, virtual columns, rows beyond EOF, trimming, and configurable right
-boundaries.
+Each tool must have an explicit public target named
+`<Plug>(artist-tool-{operation})`, for example
+`<Plug>(artist-tool-line)` and `<Plug>(artist-tool-straight-line)`.
 
-### 2. Patch/transaction engine
+## Tool Navigation and Core Controls
 
-Operations should return a patch instead of editing immediately. Preview that
-patch with extmarks, then commit it as one undo entry. The patch must preserve
-original cells where operations need to undraw or unintersect.
+Adopt the following additional buffer-local mappings:
 
-### 3. Exact geometry and topology
+| Mapping | Action |
+| --- | --- |
+| `[a` | Select the previous tool |
+| `]a` | Select the next tool |
+| `~` | Select the current tool's shifted counterpart |
+| `?` | Toggle the main key palette |
+| `o` | Open the transient options palette |
+| `<CR>` | Set or apply a point |
+| counted `<CR>` / `<C-CR>` | Finish a poly-line |
+| `h/j/k`, arrows, `C-b/C-n/C-p/C-f` | Move and update/draw the active operation |
+| `<` / `>` | Toggle the first / second arrow endpoint |
+| `<Esc>` / `<C-c>` | Cancel the current drawing or preview, but remain in Artist mode |
+| `<C-c><C-c>` / `gA` | Exit Artist mode |
 
-Port or independently reproduce Artist's eight-point arbitrary line, snapped
-line, square/circle aspect calculations, midpoint ellipse, intersection and
-unintersection rules, filling spans, arrows, and line recognition. The
-relevant upstream implementations begin with the
-[eight-point line algorithm](https://github.com/emacs-mirror/emacs/blob/f4f249a2249a7047ba41a659b8fcdcd7e1caf4e0/lisp/textmodes/artist.el#L2391-L2445)
-and
-[ellipse/circle algorithms](https://github.com/emacs-mirror/emacs/blob/f4f249a2249a7047ba41a659b8fcdcd7e1caf4e0/lisp/textmodes/artist.el#L3458-L3610).
+`[a` and `]a` follow the bracket-pair convention popularized by
+vim-unimpaired. They accept counts: `3]a` advances three entries and `2[a`
+moves back two. Cycling wraps and follows the exact tool order shown in the
+tool table and floating palette, not the registry's alphabetical order.
 
-### 4. Operation state machine
+Changing tools by any route retains the current behavior of cancelling an
+unfinished operation before selecting the new tool.
 
-Model Artist's four operation types directly:
+Expose stable `<Plug>` targets for every action, using explicit names such as
+`<Plug>(artist-next-tool)`, `<Plug>(artist-shift-tool)`, and
+`<Plug>(artist-palette)`.
 
-- Continuous: pen, pen-line, spray, erase-character
-- Poly-point: arbitrary and straight poly-lines
-- One-point: paste, flood-fill, text, vaporize
-- Two-point: lines, shapes, erase/cut/copy regions, spray radius
+## Floating Key Palette
 
-A data-driven operation registry should declare the shifted variant, drawing
-kind, preview function, fill behavior, arrow capability, and completion hooks.
-This is more scalable than adding branches to `mouse_drag()`.
+Implement a native Neovim floating window rather than depending on
+which-key.nvim.
 
-## Implementation Order
+- Show the main palette automatically after Artist mode is enabled.
+- Position it at the bottom center of the editor so it does not obscure the
+  drawing cursor.
+- Make it non-focusable and arrange entries into responsive columns.
+- Show the tool keymap and core mode controls in distinct, readable groups.
+- Highlight the active tool and update the highlight if the tool changes while
+  the palette is visible.
+- Close the palette after the first mapped tool or action key.
+- Make `?` toggle the palette at any time.
+- Close and clean up the floating window on disable, buffer/window changes, or
+  invalidation of its owning session.
+- Keep the existing winbar as the persistent compact indication of Artist
+  mode, active tool, and arrow state after the palette closes.
 
-### 1. Define compatibility
+Add `show_palette_on_enable = true` to the default configuration. When false,
+the automatic palette is suppressed, but `?`, `:ArtistPalette`, and
+`<Plug>(artist-palette)` continue to open it manually.
 
-- Pin Artist to upstream commit
-  `f4f249a2249a7047ba41a659b8fcdcd7e1caf4e0`.
-- Treat drawing output and interaction semantics as compatible behavior.
-- Give Emacs-only integrations such as Picture mode, `rect.el`, toolbars, and
-  X pointer shapes documented Neovim equivalents.
-- Decide and document the supported Neovim version range.
+The implementation must behave safely when `enable()` targets a buffer that
+is not displayed in the current window: do not steal focus or create a palette
+over an unrelated buffer.
 
-### 2. Build an oracle suite
+## Options Palette
 
-- Generate golden fixtures by running the pinned `artist.el` in batch Emacs.
-- Cover every octant, endpoint reversal, degenerate shapes, aspect ratios,
-  crossings, existing prose, fill/border settings, and trailing whitespace.
-- Check fixtures into the repository so normal CI does not require Emacs.
-- Add property tests for cancellation, endpoint reversal, buffer isolation,
-  option restoration, and one-step undo.
+`o` replaces the main palette with a transient options menu. The next valid
+key performs the corresponding action, then closes the menu. `<Esc>` closes it
+without changing anything.
 
-The current [test suite](tests/artist_spec.lua#L21) proves that the prototype
-works but cannot measure Artist parity.
+| Key | Option action |
+| --- | --- |
+| `e` | Choose the erase character |
+| `f` | Choose the fill character |
+| `l` | Choose the line character |
+| `r` | Toggle rubber-banding |
+| `t` | Toggle trailing-whitespace trimming |
+| `s` | Toggle borderless shapes |
 
-### 3. Replace the geometry core
+These keys preserve the useful mnemonics from the old Emacs-prefix mappings
+without retaining the prefix itself. Commands such as `:ArtistSet` remain
+available for all settings, including settings not represented in this small
+menu.
 
-- Implement arbitrary and straight lines.
-- Implement rectangles and aspect-correct squares.
-- Implement Artist-compatible ellipses and circles.
-- Reproduce exact intersection and unintersection behavior.
-- Add configurable line, fill, and erase characters.
-- Add fill spans, borderless shapes, and trailing-whitespace trimming.
+Expose public targets for opening the options palette and for each option
+action.
 
-### 4. Implement the interaction engine
+## Mapping Configuration and Compatibility
 
-- Add cursor-movement drawing.
-- Add continuous modes and poly-line termination.
-- Add shifted mouse variants.
-- Add first/second arrow toggling.
-- Implement Artist's operation-switching rules during an active drawing.
-- Ensure cancellation restores the buffer exactly.
+Keep `mappings` as the master boolean switch and add a `keymaps` table for
+per-action overrides. Defaults are merged by action name, not by left-hand
+side, so moving an action also removes its old concrete default.
 
-### 5. Add edit and advanced operations
+For example:
 
-#### Flood-fill
+```lua
+require("artist").setup({
+  keymaps = {
+    line = "q",
+    straight_line = "Q",
+    palette = false,
+  },
+})
+```
 
-- Use a four-connected scanline fill.
-- Match cells identical to the starting cell.
-- Respect configurable right boundaries and existing-buffer vertical bounds.
-- Make filling with the source character a no-op.
-- Compute a patch and commit the result as one undo entry.
-- Support optional progress updates without splitting undo history.
+A value of `false` disables that concrete action mapping. `<Plug>` targets and
+commands remain available when defaults are disabled so users can construct a
+fully custom interface.
 
-#### Vaporize
+While Artist mode is active, its concrete single-key mappings deliberately
+override global and buffer-local mappings. Save displaced buffer-local
+mappings before installation and restore them exactly on exit; global
+mappings naturally become visible again after the Artist buffer-local mapping
+is removed.
 
-- Recognize `-`, `|`, `/`, `\`, `+`, and `X` line topology.
-- Bridge interruptions using configurable fuzziness.
-- Preserve crossing lines through unintersection.
-- Traverse lines connected at their endpoints.
+Remove the old `C-c C-a ...` operation and setting shortcuts. The project has
+no tagged release requiring a compatibility period, and retaining two complete
+interfaces would add ambiguity to the palette and documentation. Preserve
+`<C-c>` for cancellation and `<C-c><C-c>` for exit.
 
-#### Cut, copy, and paste
+## Implementation Work
 
-- Support inclusive rectangular and aspect-correct square regions.
-- Preserve spaces and rectangular width.
-- Interoperate with a documented blockwise Neovim register while retaining an
-  internal rectangle buffer if required.
+1. Define one ordered, data-driven key specification containing action names,
+   concrete defaults, labels, tool names, shifted relationships, palette
+   groups, and cycle order. Avoid duplicating the tool order across mapping,
+   palette, and cycling code.
+2. Add global `<Plug>` mappings and conditionally install `gA`, honoring
+   existing mappings and all mapping-disable controls.
+3. Replace the Emacs-prefixed tool definitions with the single-key mappings,
+   remove `l` from keyboard movement, add `<Esc>`, `[a`/`]a`, `~`, `?`, and
+   `o`, and preserve the existing mapping save/restore guarantees.
+4. Extend cycling to accept `vim.v.count1` and traverse the ordered key
+   specification.
+5. Implement the main and options floating palettes with dedicated lifecycle
+   helpers. Ensure every mapped action closes or transitions the palette as
+   specified.
+6. Add `show_palette_on_enable`, `keymaps`, and any palette state to the public
+   types and option validation.
+7. Add `:ArtistPalette` and document all new `<Plug>` targets.
+8. Update README and `doc/artist.txt`, removing the old prefix table and
+   documenting rightward keyboard movement through `<Right>` or `<C-f>`.
 
-#### Spray
+## Verification
 
-- Add repeated spraying while the pointer or keyboard operation is active.
-- Progress characters from light to heavy.
-- Add radius selection and preview.
-- Inject the RNG and timer so tests are deterministic.
+Add integration coverage for at least the following:
 
-#### Text
-
-- Provide a pluggable renderer.
-- Support optional `figlet` integration.
-- Implement both see-through and overwrite handling for blank characters.
-- Test with a stub renderer so CI does not require `figlet`.
-
-### 6. Finish the Neovim UI
-
-- Expand `:ArtistTool` completion to every operation.
-- Provide a complete operation picker.
-- Show the active operation and drawing state in the winbar.
-- Add commands and mappings for shifted tools, settings, and arrows.
-- Optionally support mouse-wheel operation cycling.
-- Preserve and restore every displaced mapping and option.
-- Update the README and help file with all behavior and divergences.
-
-## Configuration Parity
-
-The public configuration should cover, or explicitly reject with a documented
-reason, the following Artist settings:
-
-- Rubber-banding and non-rubber-band endpoint characters
-- Line, fill, default-fill, and erase characters
-- Arrow characters
-- Aspect ratio
-- Trailing-whitespace trimming
-- Flood-fill right boundary and incremental display
-- Narrow-ellipse left and right characters
-- Filled-shape borders
-- Vaporize fuzziness
-- Spray interval, radius, character progression, and initial character
-- Text renderer, Figlet executable, and default font
-- Rectangle/register interoperability
-
-Pointer shape and Picture mode compatibility are platform-specific and should
-be documented as non-applicable unless a meaningful Neovim equivalent is
-implemented.
+- `gA` toggles a session and is not installed over an existing mapping.
+- `g:no_plugin_maps`, `g:artist_no_mappings`, and `mappings = false` suppress
+  the appropriate concrete defaults while leaving commands and `<Plug>`
+  targets usable.
+- Every single-key tool mapping selects the expected registry operation.
+- Uppercase keys select the declared shifted variants.
+- `l` selects Line; `<Right>` still moves and draws rightward.
+- `[a` and `]a` wrap, follow palette order, and honor counts.
+- `~` switches in both directions for every shifted pair.
+- `<Esc>` cancels active previews without disabling Artist.
+- The palette appears on enable by default, can be suppressed by
+  `show_palette_on_enable`, toggles with `?`, highlights the active tool, and
+  closes after an action.
+- The options palette applies each character/toggle action and cancels cleanly.
+- Palette windows are removed on disable and do not leak across buffers or
+  windows.
+- `keymaps` can move or disable individual defaults.
+- Pre-existing buffer-local mappings displaced by every new key class are
+  restored byte-for-byte on exit.
+- Existing mouse mappings, keyboard drawing, commands, user events, undo
+  behavior, and window-option restoration continue to pass.
 
 ## Definition of Done
 
-A credible faithful port must satisfy all of the following:
-
-- All 24 upstream behaviors are present, not merely similarly named tools.
-- Golden buffer output matches the pinned Artist version across the fixture
-  corpus.
-- Every operation works with both mouse and keyboard.
-- Completed operations are one undo step; previews and cancellation never
-  alter buffer history.
-- Tabs, virtual space, multibyte text, multiple windows, multiple active
-  buffers, and non-modifiable buffers are tested.
-- Large fills and connected-line vaporization have performance and termination
-  tests.
-- Neovim-specific divergences are explicitly documented.
-- Mode exit leaves no mappings, highlights, window options, timers, extmarks,
-  or pending state behind.
-
-## Repository and Licensing Prerequisites
-
-Add a GPLv3 license
-
-
-## Recommended First Slice
-
-Do not add flood-fill directly to the current five-tool abstraction. The first
-implementation slice should:
-
-1. Pin the upstream target and establish licensing.
-2. Add the differential fixture generator and initial golden cases.
-3. Introduce the display-cell grid and patch engine.
-4. Make arbitrary lines, straight lines, rectangles, squares, ellipses, and
-   circles match the oracle.
-5. Only then build flood-fill and the remaining operations on the compatible
-   substrate.
-
-This ordering produces measurable compatibility at every stage and avoids
-having to rewrite each advanced tool after the canvas model changes.
+The work is complete when the mapping and palette behavior above is covered by
+tests, the README and help file match the implementation, `make check` passes,
+and disabling Artist leaves no mappings, floats, extmarks, timers, or session
+state behind.
