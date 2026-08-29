@@ -538,19 +538,47 @@ local function preview_transaction(state, transaction)
         rendered[#rendered + 1] = replacements[col] or transaction.grid:get(row, col)
       end
       local winid = vim.fn.bufwinid(state.bufnr)
+      local text = vim.api.nvim_buf_get_lines(state.bufnr, row - 1, row, false)[1] or ""
+      local text_width = vim.fn.strdisplaywidth(text)
       local byte_col = 0
-      if winid ~= -1 and vim.fn.exists("*virtcol2col") == 1 then
+      local padding = 0
+      local window_col
+      if first > text_width then
+        byte_col = #text
+        if winid ~= -1 then
+          local leftcol = vim.api.nvim_win_call(winid, function()
+            return vim.fn.winsaveview().leftcol
+          end)
+          window_col = first - leftcol - 1
+        end
+        if not window_col or window_col < 0 then
+          window_col = nil
+          padding = first - text_width - 1
+        end
+      elseif winid ~= -1 and vim.fn.exists("*virtcol2col") == 1 then
         byte_col = math.max(0, vim.fn.virtcol2col(winid, row, first) - 1)
+        local columns = vim.fn.virtcol({ row, byte_col + 1 }, true)
+        local anchor_col = type(columns) == "table" and columns[1] or columns
+        padding = math.max(0, first - anchor_col)
       else
-        local text = vim.api.nvim_buf_get_lines(state.bufnr, row - 1, row, false)[1] or ""
         byte_col = math.min(#text, first - 1)
       end
-      vim.api.nvim_buf_set_extmark(state.bufnr, namespace, row - 1, byte_col, {
-        virt_text = { { table.concat(rendered), "ArtistPreview" } },
-        virt_text_pos = "overlay",
-        hl_mode = "combine",
+      local virt_text = {}
+      if padding > 0 then
+        virt_text[#virt_text + 1] = { string.rep(" ", padding), "" }
+      end
+      virt_text[#virt_text + 1] = { table.concat(rendered), "ArtistPreview" }
+      local extmark = {
+        virt_text = virt_text,
+        hl_mode = "replace",
         priority = 200,
-      })
+      }
+      if window_col then
+        extmark.virt_text_win_col = window_col
+      else
+        extmark.virt_text_pos = "overlay"
+      end
+      vim.api.nvim_buf_set_extmark(state.bufnr, namespace, row - 1, byte_col, extmark)
     else
       virtual_rows[row] = replacements
       virtual_last = math.max(virtual_last, row)

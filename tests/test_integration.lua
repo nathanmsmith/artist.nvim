@@ -55,6 +55,20 @@ T["keyboard drawing remains a cancellable preview"] = function()
   eq(lines(), { "" })
 end
 
+T["preview beyond non-whitespace text keeps its virtual column and highlight"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "abc" })
+  child.lua([[artist.enable(0, { tool = "line", mappings = false })]])
+  child.fn.cursor({ 1, 4, 2 })
+  child.lua([[artist.keyboard_point()]])
+
+  local marks = child.api.nvim_buf_get_extmarks(0, -1, 0, -1, { details = true })
+  eq(#marks, 1)
+  eq(marks[1][3], 3)
+  eq(marks[1][4].virt_text, { { "o", "ArtistPreview" } })
+  eq(marks[1][4].virt_text_win_col, 5)
+  eq(marks[1][4].hl_mode, "replace")
+end
+
 T["mouse drag uses virtual columns and rows"] = function()
   local winid = child.api.nvim_get_current_win()
   child.lua([[artist.enable(0, { tool = "line" })]])
