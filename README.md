@@ -1,5 +1,7 @@
 # artist.nvim
 
+[![CI](https://github.com/nathanmsmith/artist.nvim/actions/workflows/ci.yml/badge.svg)](https://github.com/nathanmsmith/artist.nvim/actions/workflows/ci.yml)
+
 [GNU Emacs Artist mode](https://github.com/emacs-mirror/emacs/blob/f4f249a2249a7047ba41a659b8fcdcd7e1caf4e0/lisp/textmodes/artist.el), faithfully ported to Neovim.
 
 Artist draws ASCII diagrams directly in a buffer. It uses display-cell

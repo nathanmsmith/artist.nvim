@@ -1,4 +1,4 @@
-.PHONY: test test-file format typecheck check oracle
+.PHONY: test test-file format style typecheck check oracle
 
 NVIM ?= nvim
 STYLUA ?= stylua
@@ -17,11 +17,14 @@ test-file: $(MINITEST_DIR)/lua/mini/test.lua
 format:
 	$(STYLUA) $(LUA_DIRS)
 
+style:
+	$(STYLUA) --check $(LUA_DIRS)
+
 typecheck: $(MINITEST_DIR)/lua/mini/test.lua
 	VIMRUNTIME="$(VIMRUNTIME)" $(LUALS) --check="$(CURDIR)" --checklevel=Warning --check_format=pretty
 
 check:
-	$(STYLUA) --check $(LUA_DIRS)
+	$(MAKE) style
 	$(MAKE) typecheck
 	$(MAKE) test
 

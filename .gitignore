@@ -1,1 +1,3 @@
 /deps/
+.nvimlog
+nvim.log

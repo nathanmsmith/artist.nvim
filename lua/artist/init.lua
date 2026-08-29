@@ -504,7 +504,7 @@ end
 ---Configure defaults for future Artist sessions and direct draw calls.
 ---@param options? Artist.Options
 function M.setup(options)
-  vim.validate("options", options, "table", true)
+  vim.validate({ options = { options, "table", true } })
   config = vim.tbl_deep_extend("force", vim.deepcopy(defaults), options or {})
   local resolved = registry.resolve(config.tool)
   if not resolved then
@@ -519,7 +519,7 @@ end
 ---@param options? Artist.Options Session-local option overrides.
 function M.enable(bufnr, options)
   bufnr = resolve_buffer(bufnr)
-  vim.validate("options", options, "table", true)
+  vim.validate({ options = { options, "table", true } })
   if not vim.api.nvim_buf_is_valid(bufnr) then
     error("artist: invalid buffer " .. tostring(bufnr))
   elseif not vim.bo[bufnr].modifiable then
