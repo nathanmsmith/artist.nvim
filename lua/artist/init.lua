@@ -8,6 +8,7 @@ local defaults = {
   pen_character = "*",
   mappings = true,
   winbar = true,
+  transparent_selection = true,
 }
 
 local tools = {
@@ -40,6 +41,17 @@ local mapping_definitions = {
 
 local toolbar_tools = { "line", "rectangle", "ellipse", "freehand", "erase" }
 
+local function with_highlight_override(value, from, to)
+  local result = {}
+  for mapping in value:gmatch("[^,]+") do
+    if not vim.startswith(mapping, from .. ":") then
+      result[#result + 1] = mapping
+    end
+  end
+  result[#result + 1] = from .. ":" .. to
+  return table.concat(result, ",")
+end
+
 local function toolbar_text(state)
   local parts = { "%#ArtistMode# ARTIST %*" }
   for _, tool in ipairs(toolbar_tools) do
@@ -57,14 +69,20 @@ local function configure_window(state, winid)
   if state.active_windows[winid] then
     return
   end
-  state.previous.virtualedit[winid] = vim.wo[winid].virtualedit
-  state.previous.wrap[winid] = vim.wo[winid].wrap
-  state.previous.winbar[winid] = vim.wo[winid].winbar
+  if state.previous.virtualedit[winid] == nil then
+    state.previous.virtualedit[winid] = vim.wo[winid].virtualedit
+    state.previous.wrap[winid] = vim.wo[winid].wrap
+    state.previous.winbar[winid] = vim.wo[winid].winbar
+    state.previous.winhighlight[winid] = vim.wo[winid].winhighlight
+  end
   state.active_windows[winid] = true
   vim.wo[winid].virtualedit = "all"
   vim.wo[winid].wrap = false
   if state.options.winbar then
     vim.wo[winid].winbar = toolbar_text(state)
+  end
+  if state.options.transparent_selection then
+    vim.wo[winid].winhighlight = with_highlight_override(vim.wo[winid].winhighlight, "Visual", "ArtistVisual")
   end
 end
 
@@ -76,6 +94,9 @@ local function restore_window(state, winid)
   vim.wo[winid].wrap = state.previous.wrap[winid]
   if state.options.winbar then
     vim.wo[winid].winbar = state.previous.winbar[winid]
+  end
+  if state.options.transparent_selection then
+    vim.wo[winid].winhighlight = state.previous.winhighlight[winid]
   end
   state.active_windows[winid] = nil
 end
@@ -279,6 +300,7 @@ function M.enable(bufnr, options)
       virtualedit = {},
       wrap = {},
       winbar = {},
+      winhighlight = {},
     },
   }
   sessions[bufnr] = state
@@ -516,19 +538,15 @@ function M._create_commands()
   vim.api.nvim_create_autocmd({ "BufWinEnter", "WinEnter" }, {
     group = augroup,
     callback = function(event)
-      local state = sessions[event.buf]
       local winid = vim.api.nvim_get_current_win()
+      for active_bufnr, active_state in pairs(sessions) do
+        if active_state.active_windows[winid] and active_bufnr ~= event.buf then
+          restore_window(active_state, winid)
+        end
+      end
+      local state = sessions[event.buf]
       if state and vim.api.nvim_win_get_buf(winid) == event.buf then
         configure_window(state, winid)
-      end
-    end,
-  })
-  vim.api.nvim_create_autocmd("BufWinLeave", {
-    group = augroup,
-    callback = function(event)
-      local state = sessions[event.buf]
-      if state then
-        restore_window(state, vim.api.nvim_get_current_win())
       end
     end,
   })

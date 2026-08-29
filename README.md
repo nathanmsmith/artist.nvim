@@ -54,6 +54,7 @@ require("artist").setup({
   pen_character = "*",
   mappings = true,
   winbar = true,
+  transparent_selection = true,
 })
 ```
 
@@ -68,6 +69,11 @@ While Artist mode is active, a buffer-local winbar shows the available tools,
 highlights the current tool, and displays the drawing shortcuts. Set
 `winbar = false` in `setup()` to hide it.
 
+The Visual selection background is transparent in Artist windows so mouse
+selection does not cover the drawing. Artist applies this with a window-local
+highlight remap and restores any existing `winhighlight` value on exit. Set
+`transparent_selection = false` to retain your normal Visual highlight.
+
 Artist mode installs these normal-mode buffer mappings:
 
 | Mapping | Action |
@@ -78,7 +84,8 @@ Artist mode installs these normal-mode buffer mappings:
 
 The cursor can move past the end of a line or below the end of the buffer while
 Artist mode is active. Artist restores `virtualedit`, `wrap`, `winbar`,
-`mouse`, and any displaced buffer-local mappings when the mode is disabled.
+`winhighlight`, `mouse`, and any displaced buffer-local mappings when the mode
+is disabled.
 
 Commands:
 
