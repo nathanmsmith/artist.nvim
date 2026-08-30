@@ -777,10 +777,14 @@ local function show_palette(state, kind)
   else
     lines = { " Artist keys (? closes)" }
     local row = {}
+    local item_width, item_spacing = 21, 2
+    local available_width = math.max(1, vim.o.columns - 2)
+    local column_count =
+      math.max(1, math.min(4, math.floor((available_width - 1 + item_spacing) / (item_width + item_spacing))))
     for _, item in ipairs(key_spec) do
       if item.group == "tools" then
         row[#row + 1] = string.format("%-2s %-18s", item.lhs, item.label)
-        if #row == 2 then
+        if #row == column_count then
           lines[#lines + 1] = " " .. table.concat(row, "  ")
           row = {}
         end

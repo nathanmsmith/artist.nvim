@@ -75,6 +75,21 @@ T["escape cancels an active preview before exiting Artist mode"] = function()
   eq(child.lua_get([[artist.is_enabled()]]), false)
 end
 
+T["key palette uses a wider, shorter layout when space permits"] = function()
+  child.o.columns = 120
+  child.lua([[artist.enable()]])
+
+  local dimensions = child.lua_get([[(function()
+    for _, winid in ipairs(vim.api.nvim_list_wins()) do
+      if vim.api.nvim_win_get_config(winid).relative ~= "" then
+        return { vim.api.nvim_win_get_width(winid), vim.api.nvim_win_get_height(winid) }
+      end
+    end
+  end)()]])
+
+  eq(dimensions, { 91, 8 })
+end
+
 T["hjkl previews a polyline and repeated enter finishes it"] = function()
   child.lua([[artist.enable(0, { tool = "poly_line", show_palette_on_enable = false })]])
   child.type_keys("<CR>", "4l", "<CR>", "2j", "<CR>", "<CR>")
