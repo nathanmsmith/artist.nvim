@@ -1733,7 +1733,6 @@ end
 
 M.tools = registry.names()
 M.operations = registry.definitions
-M.upstream_commit = "f4f249a2249a7047ba41a659b8fcdcd7e1caf4e0"
 M.canvas = canvas
 
 return M
