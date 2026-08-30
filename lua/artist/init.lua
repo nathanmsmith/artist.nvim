@@ -78,7 +78,7 @@ local key_spec = {
   },
   {
     action = "line",
-    lhs = "l",
+    lhs = "n",
     method = "select_tool",
     arg = "line",
     label = "Line",
@@ -87,7 +87,7 @@ local key_spec = {
   },
   {
     action = "straight_line",
-    lhs = "L",
+    lhs = "N",
     method = "select_tool",
     arg = "straight_line",
     label = "Straight Line",
@@ -316,7 +316,7 @@ local key_spec = {
   },
   {
     action = "finish",
-    lhs = "<C-CR>",
+    lhs = false,
     method = "finish",
     label = "Finish",
     group = "controls",
@@ -338,8 +338,8 @@ local key_spec = {
   {
     action = "cancel",
     lhs = "<Esc>",
-    method = "disable",
-    label = "Exit Artist",
+    method = "escape",
+    label = "Cancel / exit",
     group = "controls",
   },
   {
@@ -347,6 +347,20 @@ local key_spec = {
     lhs = "<C-c>",
     method = "cancel",
     label = "Cancel",
+    group = "controls",
+  },
+  {
+    action = "undo",
+    lhs = "u",
+    method = "keyboard_undo",
+    label = "Undo vertex / drawing",
+    group = "controls",
+  },
+  {
+    action = "backspace",
+    lhs = "<BS>",
+    method = "keyboard_backspace",
+    label = "Previous vertex / left",
     group = "controls",
   },
   {
@@ -360,9 +374,11 @@ local key_spec = {
 
 local mouse_mapping_definitions = {
   { "<LeftMouse>", "mouse_down" },
+  { "<2-LeftMouse>", "mouse_double_click" },
   { "<LeftDrag>", "mouse_drag" },
   { "<LeftRelease>", "mouse_up" },
   { "<S-LeftMouse>", "shift_mouse_down" },
+  { "<2-S-LeftMouse>", "mouse_double_click" },
   { "<S-LeftDrag>", "mouse_drag" },
   { "<S-LeftRelease>", "mouse_up" },
   { "<MiddleMouse>", "pick_operation" },
@@ -375,6 +391,7 @@ local movement_mappings = {
   { "h", "h" },
   { "j", "j" },
   { "k", "k" },
+  { "l", "l" },
   { "<Left>", "h" },
   { "<Down>", "j" },
   { "<Up>", "k" },
@@ -494,7 +511,7 @@ end
 local function build_poly_transaction(state, current, operation)
   local transaction = new_transaction(state)
   local points = state.poly_points or {}
-  operation = operation or state.tool
+  operation = operation or state.poly_operation or state.tool
   for index = 2, #points do
     execute(state, transaction, operation, points[index - 1], points[index], {
       first_arrow = index == 2 and state.first_arrow or false,
@@ -508,6 +525,13 @@ local function build_poly_transaction(state, current, operation)
     })
   end
   return transaction
+end
+
+---@param left Artist.Position
+---@param right Artist.Position
+---@return boolean
+local function same_position(left, right)
+  return left.row == right.row and left.col == right.col
 end
 
 ---@param state Artist.Session
@@ -665,7 +689,7 @@ local function toolbar_text(state)
     "%#ArtistMode# ARTIST %*",
     "%#ArtistTool# [" .. state.tool .. arrows .. "] %*",
     drawing and "%#ArtistHint# drawing… %*" or "",
-    "%=%#ArtistHint# <CR> draw  <C-CR> finish  <C-c> cancel %*",
+    "%=%#ArtistHint# <CR> point/finish  <BS> vertex  <Esc> cancel %*",
   })
 end
 
@@ -879,6 +903,12 @@ local function install_mappings(bufnr, state)
       state.saved_mappings[lhs] = save_mapping(lhs)
       if #definition == 2 and (method == "h" or method == "j" or method == "k" or method == "l") then
         vim.keymap.set("n", lhs, function()
+          if state.palette_kind == "options" and option_actions[lhs] then
+            local action = option_actions[lhs]
+            close_palette(state)
+            M[action[1]](action[2], bufnr)
+            return
+          end
           close_palette(state)
           M.keyboard_move(method, bufnr)
         end, { buffer = bufnr, silent = true, nowait = true, desc = "Artist: move and draw" })
@@ -1290,6 +1320,7 @@ function M.mouse_down(bufnr, shifted)
   if definition.kind == "poly_point" and not state.anchor then
     state.anchor = position
     state.poly_points = { position }
+    state.poly_operation = operation
   end
   local transaction = definition.kind == "poly_point" and build_poly_transaction(state, nil, operation)
     or new_transaction(state)
@@ -1371,7 +1402,9 @@ function M.mouse_up(bufnr)
   state.drag = nil
   if definition.kind == "poly_point" then
     local poly_points = assert(state.poly_points)
-    poly_points[#poly_points + 1] = position
+    if not same_position(poly_points[#poly_points], position) then
+      poly_points[#poly_points + 1] = position
+    end
     local transaction = build_poly_transaction(state, nil, drag.operation)
     state.anchor, state.transaction = position, transaction
     preview_operation(state, transaction, assert(poly_points[1]), position, definition.kind)
@@ -1385,6 +1418,48 @@ function M.mouse_up(bufnr)
     commit(state, drag.transaction)
   end
   update_toolbar(state)
+end
+
+---Finish an active mouse polyline at the double-clicked point.
+---@param bufnr? integer
+function M.mouse_double_click(bufnr)
+  local state
+  state, bufnr = session_for(bufnr)
+  if not state or not state.anchor or not state.poly_points then
+    return
+  end
+  local position = mouse_position(bufnr)
+  if not position then
+    return
+  end
+  local points = assert(state.poly_points)
+  if not same_position(assert(points[#points]), position) then
+    points[#points + 1] = position
+    state.anchor = position
+    state.transaction = build_poly_transaction(state)
+  end
+  if #points >= 2 then
+    M.finish(bufnr)
+  end
+end
+
+---@param state Artist.Session
+---@param position Artist.Position
+local function set_keyboard_position(state, position)
+  state.keyboard_position = { row = position.row, col = position.col }
+  local visible_row = math.min(position.row, vim.api.nvim_buf_line_count(state.bufnr))
+  local winid = vim.fn.bufwinid(state.bufnr)
+  if winid == -1 then
+    return
+  end
+  local byte_col = vim.fn.exists("*virtcol2col") == 1 and vim.fn.virtcol2col(winid, visible_row, position.col)
+    or position.col
+  local line = vim.api.nvim_buf_get_lines(state.bufnr, visible_row - 1, visible_row, false)[1] or ""
+  local existing_width = vim.fn.strdisplaywidth(line)
+  pcall(vim.api.nvim_win_set_cursor, winid, { visible_row, math.max(0, math.min(#line, byte_col - 1)) })
+  if position.col > existing_width + 1 then
+    pcall(vim.fn.cursor, { visible_row, #line + 1, position.col - existing_width - 1 })
+  end
 end
 
 ---@param bufnr? integer
@@ -1416,12 +1491,21 @@ function M.keyboard_point(bufnr)
   elseif definition.kind == "poly_point" then
     if not state.anchor then
       state.anchor, state.poly_points = position, { position }
+      state.poly_operation = state.tool
       state.transaction = new_transaction(state)
     else
       local poly_points = assert(state.poly_points)
+      if same_position(poly_points[#poly_points], position) then
+        if #poly_points >= 2 then
+          M.finish(bufnr)
+        end
+        update_toolbar(state)
+        return
+      end
       poly_points[#poly_points + 1] = position
       state.anchor = position
       state.transaction = build_poly_transaction(state)
+      state.preview_transaction = nil
     end
     preview_operation(
       state,
@@ -1430,9 +1514,6 @@ function M.keyboard_point(bufnr)
       position,
       definition.kind
     )
-    if vim.v.count > 0 then
-      M.finish(bufnr)
-    end
   elseif not state.anchor then
     state.anchor = position
     local transaction = new_transaction(state)
@@ -1466,19 +1547,7 @@ function M.keyboard_move(motion, bufnr)
   elseif motion == "k" then
     after.row = math.max(1, after.row - count)
   end
-  state.keyboard_position = after
-  local visible_row = math.min(after.row, vim.api.nvim_buf_line_count(state.bufnr))
-  local winid = vim.fn.bufwinid(state.bufnr)
-  if winid ~= -1 then
-    local byte_col = vim.fn.exists("*virtcol2col") == 1 and vim.fn.virtcol2col(winid, visible_row, after.col)
-      or after.col
-    local line = vim.api.nvim_buf_get_lines(state.bufnr, visible_row - 1, visible_row, false)[1] or ""
-    local existing_width = vim.fn.strdisplaywidth(line)
-    pcall(vim.api.nvim_win_set_cursor, winid, { visible_row, math.max(0, math.min(#line, byte_col - 1)) })
-    if after.col > existing_width + 1 then
-      pcall(vim.fn.cursor, { visible_row, #line + 1, after.col - existing_width - 1 })
-    end
-  end
+  set_keyboard_position(state, after)
   local definition = operation_definition(state.tool)
   if definition.kind == "continuous" and state.continuous_active then
     local transaction = assert(state.transaction)
@@ -1506,8 +1575,8 @@ function M.finish(bufnr)
     return
   end
   commit(state, state.preview_transaction or state.transaction)
-  state.transaction, state.preview_transaction, state.anchor, state.drag, state.poly_points, state.continuous_active =
-    nil, nil, nil, nil, nil, nil
+  state.transaction, state.preview_transaction, state.anchor, state.drag, state.poly_points, state.poly_operation, state.continuous_active =
+    nil, nil, nil, nil, nil, nil, nil
   update_toolbar(state)
 end
 
@@ -1519,10 +1588,75 @@ function M.cancel(bufnr)
     return
   end
   stop_timer(state)
-  state.transaction, state.preview_transaction, state.anchor, state.drag, state.poly_points, state.continuous_active =
-    nil, nil, nil, nil, nil, nil
+  state.transaction, state.preview_transaction, state.anchor, state.drag, state.poly_points, state.poly_operation, state.continuous_active =
+    nil, nil, nil, nil, nil, nil, nil
   clear_preview(bufnr)
   update_toolbar(state)
+end
+
+---@param state Artist.Session
+---@return boolean
+local function drawing_active(state)
+  return state.drag ~= nil or state.anchor ~= nil or state.transaction ~= nil or state.continuous_active == true
+end
+
+---Cancel an active drawing, or leave Artist mode when idle.
+---@param bufnr? integer
+function M.escape(bufnr)
+  local state
+  state, bufnr = session_for(bufnr)
+  if not state then
+    return
+  end
+  if drawing_active(state) then
+    M.cancel(bufnr)
+  else
+    M.disable(bufnr)
+  end
+end
+
+---Remove the most recent polyline vertex, cancel another active preview, or
+---fall back to normal Vim undo while Artist is idle.
+---@param bufnr? integer
+function M.keyboard_undo(bufnr)
+  local state
+  state, bufnr = session_for(bufnr)
+  if not state then
+    return
+  end
+  if state.anchor and state.poly_points then
+    local points = assert(state.poly_points)
+    if #points <= 1 then
+      M.cancel(bufnr)
+      return
+    end
+    table.remove(points)
+    local anchor = assert(points[#points])
+    state.anchor = anchor
+    state.transaction = build_poly_transaction(state)
+    state.preview_transaction = nil
+    set_keyboard_position(state, anchor)
+    preview_operation(state, state.transaction, assert(points[1]), anchor, "poly_point")
+    update_toolbar(state)
+  elseif drawing_active(state) then
+    M.cancel(bufnr)
+  else
+    vim.cmd("normal! " .. vim.v.count1 .. "u")
+  end
+end
+
+---Remove a polyline vertex, otherwise move left like normal-mode Backspace.
+---@param bufnr? integer
+function M.keyboard_backspace(bufnr)
+  local state = session_for(bufnr)
+  if not state then
+    return
+  end
+  if state.anchor and state.poly_points then
+    M.keyboard_undo(bufnr)
+  else
+    M.keyboard_move("h", bufnr)
+  end
 end
 
 ---@param bufnr? integer
@@ -1573,6 +1707,9 @@ function M._install_global_mappings()
   target("options-palette", function()
     M.show_options_palette()
   end, "Artist: options palette")
+  target("finish", function()
+    M.finish()
+  end, "Artist: finish drawing")
   for _, item in ipairs(key_spec) do
     if item.method == "select_tool" then
       target("tool-" .. item.arg:gsub("_", "-"), function()

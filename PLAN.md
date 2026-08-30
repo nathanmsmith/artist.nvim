@@ -76,12 +76,12 @@ Adopt the following additional buffer-local mappings:
 | `~` | Select the current tool's shifted counterpart |
 | `?` | Toggle the main key palette |
 | `o` | Open the transient options palette |
-| `<CR>` | Set or apply a point |
-| counted `<CR>` / `<C-CR>` | Finish a poly-line |
-| `h/j/k`, arrows, `C-b/C-n/C-p/C-f` | Move and update/draw the active operation |
+| `<CR>` | Set or apply a point; repeat without moving to finish a poly-line |
+| `h/j/k/l`, arrows, `C-b/C-n/C-p/C-f` | Move and update/draw the active operation |
+| `u` / `<BS>` | Remove the previous poly-line vertex |
 | `<` / `>` | Toggle the first / second arrow endpoint |
 | `<Esc>` / `<C-c>` | Cancel the current drawing or preview, but remain in Artist mode |
-| `<C-c><C-c>` / `gA` | Exit Artist mode |
+| `<Esc>` while idle / `<C-c><C-c>` / `gA` | Exit Artist mode |
 
 `[a` and `]a` follow the bracket-pair convention popularized by
 vim-unimpaired. They accept counts: `3]a` advances three entries and `2[a`
@@ -198,7 +198,7 @@ interfaces would add ambiguity to the palette and documentation. Preserve
    types and option validation.
 7. Add `:ArtistPalette` and document all new `<Plug>` targets.
 8. Update README and `doc/artist.txt`, removing the old prefix table and
-   documenting rightward keyboard movement through `<Right>` or `<C-f>`.
+   documenting rightward keyboard movement through `l`, `<Right>`, or `<C-f>`.
 
 ## Verification
 

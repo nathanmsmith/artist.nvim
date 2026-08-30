@@ -55,7 +55,7 @@ T["keyboard drawing remains a cancellable preview"] = function()
   eq(lines(), { "" })
 end
 
-T["escape cancels the preview and exits Artist mode"] = function()
+T["escape cancels an active preview before exiting Artist mode"] = function()
   child.api.nvim_win_set_cursor(0, { 1, 0 })
   child.lua([[artist.enable(0, { tool = "line" }); artist.keyboard_point(); artist.keyboard_move("l")]])
 
@@ -63,13 +63,91 @@ T["escape cancels the preview and exits Artist mode"] = function()
   eq(#child.api.nvim_buf_get_extmarks(0, -1, 0, -1, {}) > 0, true)
   child.type_keys("<Esc>")
 
-  eq(child.lua_get([[artist.is_enabled()]]), false)
+  eq(child.lua_get([[artist.is_enabled()]]), true)
   eq(#child.api.nvim_buf_get_extmarks(0, -1, 0, -1, {}), 0)
   eq(lines(), { "" })
+
+  child.type_keys("<Esc>")
+  eq(child.lua_get([[artist.is_enabled()]]), false)
 
   child.lua([[artist.enable(); artist.show_options_palette()]])
   child.type_keys("<Esc>")
   eq(child.lua_get([[artist.is_enabled()]]), false)
+end
+
+T["hjkl previews a polyline and repeated enter finishes it"] = function()
+  child.lua([[artist.enable(0, { tool = "poly_line", show_palette_on_enable = false })]])
+  child.type_keys("<CR>", "4l", "<CR>", "2j", "<CR>", "<CR>")
+
+  eq(lines(), { "----+", "    |", "    |" })
+  eq(child.lua_get([[artist.is_enabled()]]), true)
+  eq(child.lua_get([[artist.get_tool()]]), "poly_line")
+
+  child.cmd("silent undo")
+  eq(lines(), { "" })
+end
+
+T["repeated enter cannot finish an empty polyline"] = function()
+  child.lua([[artist.enable(0, { tool = "poly_line", show_palette_on_enable = false })]])
+  child.type_keys("<CR>", "<CR>")
+
+  eq(#child.api.nvim_buf_get_extmarks(0, -1, 0, -1, {}) > 0, false)
+  child.type_keys("2l", "<CR>", "<CR>")
+  eq(lines(), { "---" })
+end
+
+T["counted enter places a polyline vertex without finishing"] = function()
+  child.lua([[artist.enable(0, { tool = "poly_line", show_palette_on_enable = false })]])
+  child.type_keys("<CR>", "3l", "1<CR>", "2j", "<CR>", "<CR>")
+
+  eq(lines(), { "---+", "   |", "   |" })
+end
+
+T["u and backspace remove polyline vertices"] = function()
+  child.lua([[artist.enable(0, { tool = "poly_line", show_palette_on_enable = false })]])
+  child.type_keys("<CR>", "4l", "<CR>", "2j", "<CR>", "u", "<CR>")
+
+  eq(lines(), { "-----" })
+  child.type_keys("u")
+  eq(lines(), { "" })
+
+  child.type_keys("<CR>", "<BS>")
+  eq(child.lua_get([[artist.is_enabled()]]), true)
+  eq(#child.api.nvim_buf_get_extmarks(0, -1, 0, -1, {}), 0)
+end
+
+T["u cancels an active non-polyline preview"] = function()
+  child.lua([[artist.enable(0, { tool = "rectangle", show_palette_on_enable = false })]])
+  child.type_keys("<CR>", "3l", "u")
+
+  eq(lines(), { "" })
+  eq(child.lua_get([[artist.is_enabled()]]), true)
+  eq(#child.api.nvim_buf_get_extmarks(0, -1, 0, -1, {}), 0)
+end
+
+T["line tools use n and N while l always moves right"] = function()
+  child.lua([[artist.enable(0, { show_palette_on_enable = false })]])
+  child.type_keys("n")
+  eq(child.lua_get([[artist.get_tool()]]), "line")
+  child.type_keys("N")
+  eq(child.lua_get([[artist.get_tool()]]), "straight_line")
+
+  child.type_keys("l")
+  eq(child.fn.virtcol("."), 2)
+end
+
+T["finish has a plug target and supports a custom concrete mapping"] = function()
+  eq(child.fn.maparg("<Plug>(artist-finish)", "n") ~= "", true)
+  child.lua([[
+    artist.enable(0, {
+      tool = "poly_line",
+      show_palette_on_enable = false,
+      keymaps = { finish = "q" },
+    })
+  ]])
+  child.type_keys("<CR>", "2l", "<CR>", "q")
+
+  eq(lines(), { "---" })
 end
 
 T["preview beyond non-whitespace text keeps its virtual column and highlight"] = function()
@@ -140,6 +218,20 @@ T["mouse drag preserves horizontal drawing"] = function()
   child.lua([[artist.mouse_drag(); artist.mouse_up()]])
 
   eq(lines(), { "-----" })
+end
+
+T["mouse double click finishes a polyline"] = function()
+  local winid = child.api.nvim_get_current_win()
+  child.lua([[artist.enable(0, { tool = "poly_line", show_palette_on_enable = false })]])
+  local first_row = screen_row(winid)
+  set_mouse({ line = 1, column = 1, coladd = 0, screenrow = first_row, winid = winid })
+  child.lua([[artist.mouse_down(); artist.mouse_up()]])
+
+  set_mouse({ line = 1, column = 1, coladd = 4, screenrow = first_row, winid = winid })
+  child.lua([[artist.mouse_double_click()]])
+
+  eq(lines(), { "-----" })
+  eq(child.lua_get([[artist.is_enabled()]]), true)
 end
 
 T["mode restores mappings and window options"] = function()

@@ -117,6 +117,7 @@
 ---@field preview_transaction? Artist.Patch
 ---@field drag? Artist.Drag
 ---@field continuous_active? boolean
+---@field poly_operation? string
 ---@field timer? Artist.Timer|uv.uv_timer_t
 ---@field saved_mappings? table<string, table>
 ---@field mapping_definitions? table[]

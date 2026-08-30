@@ -80,21 +80,22 @@ hyphenated spellings are accepted as compatibility aliases.
 4. MAPPINGS                                                  *artist-mappings*
 
     <LeftMouse>/<LeftDrag>/<LeftRelease>       mouse operation
+    <2-LeftMouse>                             finish a mouse poly-line
     <S-LeftMouse>/<S-LeftDrag>/<S-LeftRelease> shifted operation
     <MiddleMouse>, <RightMouse>                 operation picker
-    <CR>                                       set/apply a point
-    counted <CR>, <C-CR>                       finish a poly-line
-    b/B l/L m/M r/R e/E s/S t/T                paired drawing tools
+    <CR>                                       set/apply a point; repeated at the
+                                               last vertex, finish a poly-line
+    b/B n/N m/M r/R e/E s/S t/T                paired drawing tools
     x/X v/V d/D y/Y p f                        editing and fill tools
-    h j k, arrow keys                          move and draw/preview
-    <Right> or C-f                             move rightward
+    h j k l, arrow keys                        move and draw/preview (counts work)
     C-b C-n C-p C-f                           Emacs movement equivalents
+    u / <BS>                                   remove previous poly-line vertex
     [a / ]a                                   previous / next tool (counts work)
     ~                                         shifted counterpart
     ? / o                                     key / options palette
     < / >                                      toggle endpoint arrows
-    <C-c>                                      cancel current drawing
-    <Esc> / <C-c><C-c> / gA                    exit / global toggle
+    <Esc> / <C-c>                              cancel current drawing
+    <Esc> while idle / <C-c><C-c> / gA         exit / global toggle
 
 Mappings are buffer-local and displaced mappings are restored. Set
 `mappings = false` to install none, or `mouse_wheel = true` to map the wheel
@@ -103,7 +104,8 @@ by `g:no_plugin_maps` or `g:artist_no_mappings`. `<Plug>(artist-toggle)`,
 `<Plug>(artist-enable)`, `<Plug>(artist-disable)`,
 `<Plug>(artist-palette)`, `<Plug>(artist-options-palette)`,
 `<Plug>(artist-next-tool)`, `<Plug>(artist-previous-tool)`,
-`<Plug>(artist-shift-tool)`, every `<Plug>(artist-tool-{operation})`, and
+`<Plug>(artist-shift-tool)`, `<Plug>(artist-finish)`, every
+`<Plug>(artist-tool-{operation})`, and
 the option targets `<Plug>(artist-option-{setting})` are always available.
 
 ==============================================================================

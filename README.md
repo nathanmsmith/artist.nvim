@@ -64,17 +64,18 @@ Toggle Artist with `gA` (when it is unused), then use these buffer-local mapping
 | Mapping | Action |
 | --- | --- |
 | left drag / shift-left drag | Preview the normal / shifted operation |
+| double left click | Finish a mouse-drawn poly-line |
 | middle or right click | Open the operation picker |
-| `<CR>` | Set a point, apply a one-point operation, or add a poly-line point |
-| counted `<CR>` / `<C-CR>` | Finish a poly-line |
-| `b/B`, `l/L`, `m/M`, `r/R`, `e/E`, `s/S`, `t/T` | Paired drawing tools (lowercase / shifted) |
+| `<CR>` | Set a point, apply a one-point operation, or add a poly-line point; press again without moving to finish a poly-line |
+| `b/B`, `n/N`, `m/M`, `r/R`, `e/E`, `s/S`, `t/T` | Paired drawing tools (lowercase / shifted) |
 | `x/X`, `v/V`, `d/D`, `y/Y`, `p`, `f` | Erase, vaporize, cut, copy, paste, and fill tools |
-| `h/j/k`, arrows, `C-b/C-n/C-p/C-f` | Move and update/draw; use `<Right>` or `C-f` rightward |
+| `h/j/k/l`, arrows, `C-b/C-n/C-p/C-f` | Move and update the active preview; counts work |
+| `u` / `<BS>` | Remove the previous poly-line vertex; `u` cancels other active previews |
 | `[a` / `]a`, `~` | Previous / next tool and shifted counterpart |
 | `?`, `o` | Toggle the key palette / open its options menu |
 | `<` / `>` | Toggle the first / second arrow endpoint |
-| `<C-c>` | Cancel the current drawing without changing the buffer or undo history |
-| `<Esc>` / `<C-c><C-c>` / `gA` | Exit Artist mode |
+| `<Esc>` / `<C-c>` | Cancel the current drawing without changing the buffer or undo history |
+| `<Esc>` while idle / `<C-c><C-c>` / `gA` | Exit Artist mode |
 
 Set `mouse_wheel = true` to cycle operations with the mouse wheel. Every
 displaced buffer mapping and the `virtualedit`, `wrap`, `statusline`,
@@ -142,7 +143,8 @@ remain available. `mappings = false`, `g:no_plugin_maps`, or
 the stable `<Plug>(artist-toggle)`, `<Plug>(artist-enable)`,
 `<Plug>(artist-disable)`, `<Plug>(artist-palette)`,
 `<Plug>(artist-next-tool)`, `<Plug>(artist-previous-tool)`,
-`<Plug>(artist-shift-tool)`, and `<Plug>(artist-tool-{operation})` targets
+`<Plug>(artist-shift-tool)`, `<Plug>(artist-finish)`, and
+`<Plug>(artist-tool-{operation})` targets
 remain available.
 
 ## Lua API
