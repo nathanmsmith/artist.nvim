@@ -77,7 +77,7 @@ Toggle Artist with `gA` (when it is unused), then use these buffer-local mapping
 | `<C-c><C-c>` / `gA` | Exit Artist mode |
 
 Set `mouse_wheel = true` to cycle operations with the mouse wheel. Every
-displaced buffer mapping and the `virtualedit`, `wrap`, `winbar`,
+displaced buffer mapping and the `virtualedit`, `wrap`, `statusline`,
 `winhighlight`, and global `mouse` options are restored on exit.
 
 ## Configuration
@@ -123,7 +123,7 @@ require("artist").setup({
   keymaps = {},                 -- per-action mapping overrides, or false to disable
   show_palette_on_enable = true,
   mouse_wheel = false,
-  winbar = true,
+  statusline = true,
   transparent_selection = true,
 })
 ```
@@ -172,7 +172,7 @@ the `ArtistEnabled`, `ArtistDisabled`, and `ArtistToolChanged` `User` events.
 - Extmark overlays replace Emacs rubber-band buffer edits, so cancellation is
   history-free.
 - A configurable blockwise Neovim register replaces `rect.el` integration.
-- A winbar and `vim.ui.select` picker replace the mode-line, toolbar, and popup
+- A statusline and `vim.ui.select` picker replace the mode-line, toolbar, and popup
   menu.
 - Picture mode, X pointer shapes, and Emacs input queue display updates have
   no direct Neovim equivalent. `flood_fill_incremental` is accepted for

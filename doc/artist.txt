@@ -144,7 +144,7 @@ Setup is optional: >lua
     keymaps = {},
     show_palette_on_enable = true,
     mouse_wheel = false,
-    winbar = true,
+    statusline = true,
     transparent_selection = true,
   })
 <
@@ -182,7 +182,7 @@ ArtistEnabled, ArtistDisabled, and ArtistToolChanged are `User` events.
 NEOVIM DIVERGENCES                                      *artist-divergences*
 
 Extmarks replace buffer-mutating rubber banding; a blockwise register replaces
-rect.el; the winbar and vim.ui.select replace Emacs UI integrations. Picture
+rect.el; the statusline and vim.ui.select replace Emacs UI integrations. Picture
 mode and X pointer shapes are not applicable to Neovim.
 
 vim:tw=78:ts=8:noet:ft=help:norl:

@@ -42,7 +42,7 @@ local defaults = {
   keymaps = {},
   show_palette_on_enable = true,
   mouse_wheel = false,
-  winbar = true,
+  statusline = true,
   transparent_selection = true,
 }
 
@@ -678,14 +678,14 @@ local function configure_window(state, winid)
   if state.previous.virtualedit[winid] == nil then
     state.previous.virtualedit[winid] = vim.wo[winid].virtualedit
     state.previous.wrap[winid] = vim.wo[winid].wrap
-    state.previous.winbar[winid] = vim.wo[winid].winbar
+    state.previous.statusline[winid] = vim.wo[winid].statusline
     state.previous.winhighlight[winid] = vim.wo[winid].winhighlight
   end
   state.active_windows[winid] = true
   vim.wo[winid].virtualedit = "all"
   vim.wo[winid].wrap = false
-  if state.options.winbar then
-    vim.wo[winid].winbar = toolbar_text(state)
+  if state.options.statusline then
+    vim.wo[winid].statusline = toolbar_text(state)
   end
   if state.options.transparent_selection then
     vim.wo[winid].winhighlight = with_highlight_override(vim.wo[winid].winhighlight, "Visual", "ArtistVisual")
@@ -700,17 +700,17 @@ local function restore_window(state, winid)
   end
   vim.wo[winid].virtualedit = state.previous.virtualedit[winid]
   vim.wo[winid].wrap = state.previous.wrap[winid]
-  vim.wo[winid].winbar = state.previous.winbar[winid]
+  vim.wo[winid].statusline = state.previous.statusline[winid]
   vim.wo[winid].winhighlight = state.previous.winhighlight[winid]
   state.active_windows[winid] = nil
 end
 
 ---@param state Artist.Session
 local function update_toolbar(state)
-  if state.options.winbar then
+  if state.options.statusline then
     for winid in pairs(state.active_windows) do
       if vim.api.nvim_win_is_valid(winid) then
-        vim.wo[winid].winbar = toolbar_text(state)
+        vim.wo[winid].statusline = toolbar_text(state)
       end
     end
   end
@@ -1012,7 +1012,7 @@ function M.enable(bufnr, options)
     first_arrow = effective.first_arrow,
     second_arrow = effective.second_arrow,
     active_windows = {},
-    previous = { virtualedit = {}, wrap = {}, winbar = {}, winhighlight = {} },
+    previous = { virtualedit = {}, wrap = {}, statusline = {}, winhighlight = {} },
   }
   sessions[bufnr] = state
   for _, winid in ipairs(vim.api.nvim_list_wins()) do

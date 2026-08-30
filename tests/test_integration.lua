@@ -129,7 +129,7 @@ T["mode restores mappings and window options"] = function()
   local old_mouse = child.o.mouse
   local old_virtualedit = child.wo.virtualedit
   local old_wrap = child.wo.wrap
-  local old_winbar = child.wo.winbar
+  local old_statusline = child.wo.statusline
   local old_winhighlight = child.wo.winhighlight
   child.wo.winhighlight = old_winhighlight == "" and "Normal:Normal" or old_winhighlight
   local artist_winhighlight = child.wo.winhighlight
@@ -139,24 +139,24 @@ T["mode restores mappings and window options"] = function()
   child.lua([[artist.enable(0, { tool = "line" })]])
   eq(child.lua_get([[artist.is_enabled()]]), true)
   eq(child.wo.virtualedit, "all")
-  eq(child.wo.winbar:find("ARTIST", 1, true) ~= nil, true)
-  eq(child.wo.winbar:find("[line]", 1, true) ~= nil, true)
+  eq(child.wo.statusline:find("ARTIST", 1, true) ~= nil, true)
+  eq(child.wo.statusline:find("[line]", 1, true) ~= nil, true)
   eq(child.wo.winhighlight:find("Visual:ArtistVisual", 1, true) ~= nil, true)
   eq(child.wo.winhighlight:find("Normal:Normal", 1, true) ~= nil, true)
 
   child.lua([[artist.set_tool("ellipse")]])
   eq(child.lua_get([[artist.get_tool()]]), "ellipse")
-  eq(child.wo.winbar:find("[ellipse]", 1, true) ~= nil, true)
+  eq(child.wo.statusline:find("[ellipse]", 1, true) ~= nil, true)
 
   local artist_buffer = child.api.nvim_get_current_buf()
   local other_buffer = child.api.nvim_create_buf(false, true)
   child.api.nvim_win_set_buf(0, other_buffer)
-  eq(child.wo.winbar, old_winbar)
+  eq(child.wo.statusline, old_statusline)
   eq(child.wo.winhighlight, artist_winhighlight)
   eq(child.wo.virtualedit, old_virtualedit)
 
   child.api.nvim_win_set_buf(0, artist_buffer)
-  eq(child.wo.winbar:find("[ellipse]", 1, true) ~= nil, true)
+  eq(child.wo.statusline:find("[ellipse]", 1, true) ~= nil, true)
   child.api.nvim_buf_delete(other_buffer, { force = true })
 
   child.api.nvim_win_set_cursor(0, { 1, 0 })
@@ -170,7 +170,7 @@ T["mode restores mappings and window options"] = function()
   eq(child.o.mouse, old_mouse)
   eq(child.wo.virtualedit, old_virtualedit)
   eq(child.wo.wrap, old_wrap)
-  eq(child.wo.winbar, old_winbar)
+  eq(child.wo.statusline, old_statusline)
   eq(child.wo.winhighlight, artist_winhighlight)
   eq(child.fn.maparg("<CR>", "n", false, true).rhs, old_enter_mapping)
 end

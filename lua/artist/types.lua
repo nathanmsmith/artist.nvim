@@ -60,7 +60,7 @@
 ---@field keymaps? table<string, string|false>
 ---@field show_palette_on_enable? boolean
 ---@field mouse_wheel? boolean
----@field winbar? boolean
+---@field statusline? boolean
 ---@field transparent_selection? boolean
 ---@field overwrite? boolean
 ---@field bufnr? integer
@@ -97,7 +97,7 @@
 ---@class Artist.PreviousWindowOptions
 ---@field virtualedit table<integer, string>
 ---@field wrap table<integer, boolean>
----@field winbar table<integer, string>
+---@field statusline table<integer, string>
 ---@field winhighlight table<integer, string>
 
 ---Per-buffer state for an enabled Artist mode session.
