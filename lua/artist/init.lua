@@ -338,8 +338,8 @@ local key_spec = {
   {
     action = "cancel",
     lhs = "<Esc>",
-    method = "cancel",
-    label = "Cancel",
+    method = "disable",
+    label = "Exit Artist",
     group = "controls",
   },
   {
@@ -746,7 +746,7 @@ local function show_palette(state, kind)
   local lines = {}
   if kind == "options" then
     lines = {
-      " Artist options (Esc closes)",
+      " Artist options (Esc exits)",
       " e erase character   f fill character   l line character",
       " r rubber banding     t trim whitespace   s borderless shapes",
     }
@@ -765,7 +765,7 @@ local function show_palette(state, kind)
     if #row > 0 then
       lines[#lines + 1] = " " .. table.concat(row, "  ")
     end
-    lines[#lines + 1] = " [a/]a previous/next   ~ shifted   o options   <Esc> cancel   <C-c><C-c> exit"
+    lines[#lines + 1] = " [a/]a previous/next   ~ shifted   o options   <Esc> exit   <C-c> cancel"
   end
   local width = 1
   for _, line in ipairs(lines) do
@@ -900,10 +900,6 @@ local function install_mappings(bufnr, state)
       else
         vim.keymap.set("n", lhs, function()
           if state.palette_kind == "options" then
-            if lhs == "<Esc>" then
-              close_palette(state)
-              return
-            end
             if option_actions[lhs] then
               local action = option_actions[lhs]
               close_palette(state)

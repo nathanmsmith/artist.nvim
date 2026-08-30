@@ -55,6 +55,23 @@ T["keyboard drawing remains a cancellable preview"] = function()
   eq(lines(), { "" })
 end
 
+T["escape cancels the preview and exits Artist mode"] = function()
+  child.api.nvim_win_set_cursor(0, { 1, 0 })
+  child.lua([[artist.enable(0, { tool = "line" }); artist.keyboard_point(); artist.keyboard_move("l")]])
+
+  eq(child.lua_get([[artist.is_enabled()]]), true)
+  eq(#child.api.nvim_buf_get_extmarks(0, -1, 0, -1, {}) > 0, true)
+  child.type_keys("<Esc>")
+
+  eq(child.lua_get([[artist.is_enabled()]]), false)
+  eq(#child.api.nvim_buf_get_extmarks(0, -1, 0, -1, {}), 0)
+  eq(lines(), { "" })
+
+  child.lua([[artist.enable(); artist.show_options_palette()]])
+  child.type_keys("<Esc>")
+  eq(child.lua_get([[artist.is_enabled()]]), false)
+end
+
 T["preview beyond non-whitespace text keeps its virtual column and highlight"] = function()
   child.api.nvim_buf_set_lines(0, 0, -1, false, { "abc" })
   child.lua([[artist.enable(0, { tool = "line", mappings = false })]])

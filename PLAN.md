@@ -176,7 +176,7 @@ is removed.
 Remove the old `C-c C-a ...` operation and setting shortcuts. The project has
 no tagged release requiring a compatibility period, and retaining two complete
 interfaces would add ambiguity to the palette and documentation. Preserve
-`<C-c>` for cancellation and `<C-c><C-c>` for exit.
+`<C-c>` for cancellation; `<Esc>` and `<C-c><C-c>` exit Artist mode.
 
 ## Implementation Work
 
@@ -213,7 +213,7 @@ Add integration coverage for at least the following:
 - `l` selects Line; `<Right>` still moves and draws rightward.
 - `[a` and `]a` wrap, follow palette order, and honor counts.
 - `~` switches in both directions for every shifted pair.
-- `<Esc>` cancels active previews without disabling Artist.
+- `<Esc>` cancels active previews and disables Artist.
 - The palette appears on enable by default, can be suppressed by
   `show_palette_on_enable`, toggles with `?`, highlights the active tool, and
   closes after an action.

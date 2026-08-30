@@ -73,8 +73,8 @@ Toggle Artist with `gA` (when it is unused), then use these buffer-local mapping
 | `[a` / `]a`, `~` | Previous / next tool and shifted counterpart |
 | `?`, `o` | Toggle the key palette / open its options menu |
 | `<` / `>` | Toggle the first / second arrow endpoint |
-| `<Esc>` / `<C-c>` | Cancel without changing the buffer or undo history |
-| `<C-c><C-c>` / `gA` | Exit Artist mode |
+| `<C-c>` | Cancel the current drawing without changing the buffer or undo history |
+| `<Esc>` / `<C-c><C-c>` / `gA` | Exit Artist mode |
 
 Set `mouse_wheel = true` to cycle operations with the mouse wheel. Every
 displaced buffer mapping and the `virtualedit`, `wrap`, `statusline`,

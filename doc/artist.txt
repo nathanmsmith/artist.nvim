@@ -93,8 +93,8 @@ hyphenated spellings are accepted as compatibility aliases.
     ~                                         shifted counterpart
     ? / o                                     key / options palette
     < / >                                      toggle endpoint arrows
-    <Esc> / <C-c>                              cancel
-    <C-c><C-c> / gA                            exit / global toggle
+    <C-c>                                      cancel current drawing
+    <Esc> / <C-c><C-c> / gA                    exit / global toggle
 
 Mappings are buffer-local and displaced mappings are restored. Set
 `mappings = false` to install none, or `mouse_wheel = true` to map the wheel
